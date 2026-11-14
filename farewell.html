@@ -3,7 +3,7 @@
   <head>
     <title>Farewell | GForm to GPT</title>
     <style>
-      @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap");
+      @import url("fonts.css");
 
       * { box-sizing: border-box; }
 
@@ -202,6 +202,14 @@
       }
 
       svg { flex-shrink: 0; }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
     </style>
   </head>
   <body>

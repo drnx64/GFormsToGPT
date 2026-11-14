@@ -1,4 +1,17 @@
-// Popup script for GFormToGPT v4.1.5 - Neural Interface
+// Popup script for GFormToGPT v4.4.0 - Neural Interface
+
+// ── Escaping (form titles / answers / diag fields are untrusted page text) ──
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case '"': return "&quot;";
+      default: return "&#39;";
+    }
+  });
+}
 
 // ── Tab switching functionality ──
 document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -37,19 +50,19 @@ async function loadHistory() {
 
   if (historyList) {
     historyList.innerHTML = history.map(item => `
-      <div class="history-item" data-id="${item.id}">
+      <div class="history-item" data-id="${escapeHtml(item.id)}">
         <div class="history-header">
           <div>
-            <h4>${item.formTitle || "Untitled Form"}</h4>
-            <span>${new Date(item.timestamp).toLocaleString()}</span>
+            <h4>${escapeHtml(item.formTitle || "Untitled Form")}</h4>
+            <span>${escapeHtml(new Date(item.timestamp).toLocaleString())}</span>
           </div>
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </div>
         <div class="history-content">
           ${(item.questions || []).map((q, idx) => `
             <div class="history-q-row">
-              <div class="history-q">[Q${idx + 1}] ${q.q}</div>
-              <div class="history-a">${q.a}</div>
+              <div class="history-q">[Q${idx + 1}] ${escapeHtml(q.q)}</div>
+              <div class="history-a">${escapeHtml(q.a)}</div>
             </div>
           `).join('')}
           <div class="export-btn-container">
@@ -212,8 +225,14 @@ if (checkUpdateBtn) {
     updateStatus.style.display = "block";
     chrome.runtime.sendMessage({ action: "manualUpdateCheck" }, (response) => {
       checkUpdateBtn.disabled = false;
+      if (chrome.runtime.lastError || !response) {
+        updateStatus.className = "status error";
+        updateStatus.textContent = "Update check failed.";
+        setTimeout(() => { if (updateStatus) updateStatus.style.display = "none"; }, 3000);
+        return;
+      }
       updateStatus.className = "status success";
-      updateStatus.textContent = (response && response.updateAvailable) ? `✓ New version ${response.version} found!` : "✓ Latest version.";
+      updateStatus.textContent = response.updateAvailable ? `✓ New version ${response.version} found!` : "✓ Latest version.";
       setTimeout(() => { if (updateStatus) updateStatus.style.display = "none"; }, 3000);
     });
   });
@@ -229,6 +248,11 @@ if (clearBtn) {
     statusDiv.style.display = "block";
     chrome.runtime.sendMessage({ action: "clearChatGPTData" }, (response) => {
       clearBtn.disabled = false;
+      if (chrome.runtime.lastError || !response) {
+        statusDiv.className = "status error";
+        statusDiv.textContent = "Failed to clear ChatGPT data.";
+        return;
+      }
       statusDiv.className = response.success ? "status success" : "status error";
       statusDiv.textContent = response.message;
     });
@@ -273,15 +297,18 @@ function renderDiagEntry(entry) {
   else if (entry.filled !== undefined) detail = `${entry.filled}/${entry.total} filled`;
   else if (entry.keyCount) detail = `${entry.keyCount} keys`;
   else if (entry.error) detail = entry.error;
-  else if (entry.url) detail = new URL(entry.url).pathname.split("/").pop() || entry.url;
-  
+  else if (entry.url) {
+    try { detail = new URL(entry.url).pathname.split("/").pop() || entry.url; }
+    catch (e) { detail = entry.url; }
+  }
+
   return `
     <div style="background:${bg}; border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:11px;">
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span style="color:rgba(255,255,255,0.7); font-weight:500;">${entry.type.replace(/_/g, " ")}</span>
-        <span style="color:rgba(255,255,255,0.3); font-size:10px;">${time}</span>
+        <span style="color:rgba(255,255,255,0.7); font-weight:500;">${escapeHtml(String(entry.type || "").replace(/_/g, " "))}</span>
+        <span style="color:rgba(255,255,255,0.3); font-size:10px;">${escapeHtml(time)}</span>
       </div>
-      ${detail ? `<div style="color:rgba(255,255,255,0.5); margin-top:3px; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${detail}</div>` : ""}
+      ${detail ? `<div style="color:rgba(255,255,255,0.5); margin-top:3px; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(detail)}</div>` : ""}
     </div>
   `;
 }

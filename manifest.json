@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
   "name": "GForm to GPT",
-  "version": "4.3.1",
+  "version": "4.4.0",
   "description": "Scan Google Forms, filter personal questions, and auto-fill with ChatGPT responses",
   "author": "@drnx64",
   "web_accessible_resources": [
     {
-      "resources": ["welcome.html", "bg.jpg", "welcome.js", "typed.js", "farewell.html"],
+      "resources": ["welcome.html", "bg.jpg", "welcome.js", "typed.js", "farewell.html", "fonts.css", "fonts/*"],
       "matches": ["<all_urls>"]
     }
   ],
@@ -14,7 +14,6 @@
     "tabs",
     "activeTab",
     "scripting",
-    "cookies",
     "browsingData",
     "storage",
     "notifications",
@@ -41,17 +40,17 @@
     },
     {
       "matches": ["https://chatgpt.com/*"],
-      "js": ["chatgpt_content.js"],
+      "js": ["ai_common.js", "chatgpt_content.js"],
       "run_at": "document_end"
     },
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["claude_content.js"],
+      "js": ["ai_common.js", "claude_content.js"],
       "run_at": "document_end"
     },
     {
       "matches": ["https://gemini.google.com/*"],
-      "js": ["gemini_content.js"],
+      "js": ["ai_common.js", "gemini_content.js"],
       "run_at": "document_end"
     }
   ],

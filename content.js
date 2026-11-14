@@ -1,4 +1,4 @@
-// Chrome Extension version of GForm to GPT v4.1.5 - Neural Interface
+// Chrome Extension version of GForm to GPT v4.4.0 - Neural Interface
 // Content script injected into Google Forms
 
 (function () {
@@ -13,12 +13,16 @@
   let formTitle = "";
   let questionMap = new Map();
 
-  // Load settings
-  chrome.storage.local.get(["customPrompt", "humanTyping", "verboseLogging"], (data) => {
-    if (data.customPrompt) customInstructions = data.customPrompt;
-    if (data.humanTyping !== undefined) useHumanTyping = data.humanTyping;
-    if (data.verboseLogging !== undefined) verboseLogging = data.verboseLogging;
-  });
+  // Load settings. Exposed as a promise so scan/fill can await it —
+  // otherwise a fill that starts before the callback lands uses stale defaults.
+  const settingsReady = chrome.storage.local
+    .get(["customPrompt", "humanTyping", "verboseLogging"])
+    .then((data) => {
+      if (data.customPrompt) customInstructions = data.customPrompt;
+      if (data.humanTyping !== undefined) useHumanTyping = data.humanTyping;
+      if (data.verboseLogging !== undefined) verboseLogging = data.verboseLogging;
+    })
+    .catch(() => {});
 
   function log(...args) { if (verboseLogging) console.log("[GFormToGPT]", ...args); }
 
@@ -39,7 +43,7 @@
   // ── UI Styles ──
   const style = document.createElement("style");
   style.textContent = `
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500&display=swap');
+    @import url('${chrome.runtime.getURL("fonts.css")}');
     #gf-status-overlay { position: fixed; bottom: 30px; left: 30px; background: rgba(15, 12, 41, 0.9); backdrop-filter: blur(16px); color: #fff; padding: 12px 24px; border-radius: 50px; font-family: 'Inter', sans-serif; font-size: 14px; z-index: 2147483646; display: flex; align-items: center; gap: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); transform: translateY(100px); transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); opacity: 0; pointer-events: none; }
     #gf-status-overlay.visible { transform: translateY(0); opacity: 1; }
     .gf-pulse { width: 10px; height: 10px; background: rgba(108, 99, 255, 0.8); border-radius: 50%; animation: gf-pulse 1.5s infinite; }
@@ -51,6 +55,9 @@
     .gf-highlight-filling { outline: 4px solid rgba(108, 99, 255, 0.8) !important; outline-offset: 2px !important; transition: outline 0.2s ease !important; border-radius: 8px !important; }
     #gf-disclaimer { position: fixed; top: 20px; right: 20px; z-index: 2147483647; background: rgba(15, 12, 41, 0.92); backdrop-filter: blur(20px); color: #fff; padding: 12px 20px; border-radius: 12px; max-width: 300px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 8px 32px rgba(0,0,0,0.4); font-family: 'Inter', sans-serif; font-size: 13px; line-height: 1.5; opacity: 0; transform: translateX(40px); transition: 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none; }
     #gf-disclaimer.visible { opacity: 1; transform: translateX(0); }
+    @media (prefers-reduced-motion: reduce) {
+      #gf-status-overlay, .gf-toast, #gf-disclaimer, .gf-pulse { animation: none !important; transition: none !important; }
+    }
   `;
   document.head.appendChild(style);
 
@@ -85,6 +92,7 @@
 
   // ── Core Logic ──
   async function scanForm() {
+    await settingsReady;
     showOverlay("Neural Scanning Deep Form Data...");
     let containers = Array.from(document.querySelectorAll('[role="listitem"], .Qr7Oae, .geS5ne, .geS5n, .z387u, .m79B2c'));
     if (!containers.length) { 
@@ -294,9 +302,10 @@ QUESTIONS:\n${list}\nJSON:`;
   }
 
   async function fillForm(answers) {
+    await settingsReady;
     if (!questionMap.size) { await scanForm(); }
     showOverlay("Injecting Neural Responses...");
-    
+
     let filled = 0, total = 0;
     const historyPayload = { formTitle, questions: [] };
 
@@ -309,46 +318,64 @@ QUESTIONS:\n${list}\nJSON:`;
       qd.container.classList.add("gf-highlight-filling");
       await sleep(150);
 
+      let questionFilled = false;
       try {
         if (qd.type === "radio") {
           const opt = qd.options.find(o => o.letter === String(val).toLowerCase());
-          if (opt && opt.element) { opt.element.click(); filled++; }
+          if (opt && opt.element) { opt.element.click(); questionFilled = true; }
           else if (opt && qd.subRow) {
             const radios = qd.subRow.querySelectorAll('[role="radio"]');
             const idx = qd.options.indexOf(opt);
-            if (radios[idx]) { radios[idx].click(); filled++; }
+            if (radios[idx]) { radios[idx].click(); questionFilled = true; }
           }
         } else if (qd.type === "checkbox") {
           const vals = Array.isArray(val) ? val : [val];
+          // Count as filled when every requested option resolved — including
+          // ones already checked (no click needed).
+          let allResolved = vals.length > 0;
           vals.forEach(v => {
             const opt = qd.options.find(o => o.letter === String(v).toLowerCase());
-            if (opt && opt.element.getAttribute("aria-checked") !== "true") opt.element.click();
+            if (!opt || !opt.element) { allResolved = false; return; }
+            if (opt.element.getAttribute("aria-checked") !== "true") opt.element.click();
           });
-          filled++;
+          if (allResolved || qd.options.length === 0) questionFilled = true;
         } else if (qd.type === "text" || qd.type === "textarea") {
           const input = qd.container.querySelector('input, textarea');
           if (input) {
             input.focus();
-            const nativeInputValue = Object.getOwnPropertyDescriptor(
-              window.HTMLInputElement.prototype, 'value'
-            ) || Object.getOwnPropertyDescriptor(
-              window.HTMLTextAreaElement.prototype, 'value'
-            );
-            if (nativeInputValue && nativeInputValue.set) {
-              nativeInputValue.set.call(input, String(val));
+            // Pick the descriptor matching the actual element — the old code
+            // always grabbed HTMLInputElement's setter, which throws/misfires
+            // on <textarea>.
+            const proto = input.tagName === "TEXTAREA"
+              ? window.HTMLTextAreaElement.prototype
+              : window.HTMLInputElement.prototype;
+            const nativeValue = Object.getOwnPropertyDescriptor(proto, 'value');
+            const str = String(val);
+
+            if (useHumanTyping && str.length > 0) {
+              if (nativeValue && nativeValue.set) nativeValue.set.call(input, "");
+              else input.value = "";
+              for (const ch of str) {
+                if (nativeValue && nativeValue.set) nativeValue.set.call(input, input.value + ch);
+                else input.value += ch;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                await sleep(15 + Math.random() * 35);
+              }
+            } else if (nativeValue && nativeValue.set) {
+              nativeValue.set.call(input, str);
             } else {
-              input.value = String(val);
+              input.value = str;
             }
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
-            filled++;
+            questionFilled = true;
           }
         } else if (qd.type === "dropdown") {
           const select = qd.container.querySelector('select, [role="listbox"], [role="combobox"], .docssharedWizSelect, .v08pS, .ryv9W, .RbCvuf');
           const targetOption = qd.options.find(o => o.letter === String(val).toLowerCase()) || qd.options[0];
           if (targetOption && targetOption.element) {
             targetOption.element.click();
-            filled++;
+            questionFilled = true;
           } else if (targetOption && targetOption.text && select) {
             const nativeSelect = select.tagName === 'SELECT' ? select : select.querySelector('select');
             if (nativeSelect) {
@@ -358,15 +385,17 @@ QUESTIONS:\n${list}\nJSON:`;
               if (matchingOption) {
                 matchingOption.selected = true;
                 nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                filled++;
+                questionFilled = true;
               }
             }
           }
-          if (!filled) {
+          if (!questionFilled) {
             log("Dropdown auto-fill not available for:", val, qd);
           }
         }
-        if (qd.type !== "dropdown" || filled) {
+
+        if (questionFilled) {
+          filled++;
           historyPayload.questions.push({ q: qd.text, a: String(val) });
         }
       } catch (e) { log("Fill Err:", e); }
@@ -394,8 +423,15 @@ QUESTIONS:\n${list}\nJSON:`;
   }
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "scanForm") { scanForm().then(sendResponse); return true; }
-    else if (request.action === "fillForm") { fillForm(request.answers).then(sendResponse); return true; }
-    else if (request.action === "autoFillForm") { fillForm(request.data).then(sendResponse); return true; }
+    const respond = (promise) => {
+      promise
+        .then(sendResponse)
+        .catch((e) => sendResponse({ success: false, error: String((e && e.message) || e) }));
+      return true;
+    };
+    if (request.action === "scanForm") return respond(scanForm());
+    if (request.action === "fillForm") return respond(fillForm(request.answers));
+    if (request.action === "autoFillForm") return respond(fillForm(request.data));
+    return false;
   });
 })();
