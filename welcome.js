@@ -1,107 +1,13 @@
-// Welcome page logic for GForm to GPT
-document.addEventListener('DOMContentLoaded', () => {
-  // Initialize Typed.js for the main title
-  const heroTitle = document.querySelector('#hero-title');
-  if (typeof Typed !== 'undefined' && heroTitle) {
-    new Typed('#hero-title', {
-      strings: ['GForm to GPT', 'Neural Automation.'],
-      typeSpeed: 60,
-      showCursor: false,
-      onComplete: () => {
-        // Hero subtitle animation
-        const typedEl = document.querySelector('#typed');
-        if (typedEl) {
-          new Typed('#typed', {
-            strings: [
-              'Automate Google Forms with Neural Intelligence.',
-              'Seamless support for ChatGPT, Claude, and Gemini.',
-              'Bypass detection with Human-Mimetic Typing.',
-              'The future of productivity is here.'
-            ],
-            typeSpeed: 40,
-            backSpeed: 20,
-            backDelay: 2000,
-            loop: true
-          });
-        }
-        
-        // Capability section title animation
-        const featTitle = document.querySelector('#feat-title');
-        if (featTitle) {
-          new Typed('#feat-title', {
-            strings: ['Intelligent Automation', 'Neural Efficiency', 'Extreme Productivity'],
-            typeSpeed: 50,
-            backSpeed: 30,
-            backDelay: 3000,
-            loop: true
-          });
-        }
-      }
-    });
-  }
-
-  // Scroll down functionality
-  const scrollDownBtn = document.querySelector('.scroll-down');
-  if (scrollDownBtn) {
-    scrollDownBtn.addEventListener('click', () => {
-      const mainContainer = document.querySelector('.main-container');
-      if (mainContainer) {
-        mainContainer.scrollIntoView({ behavior: 'smooth' });
-      }
-    });
-  }
-
-  // Intersection Observer for scroll animations
-  const revealElements = document.querySelectorAll('.reveal');
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('active');
-      }
-    });
-  }, { threshold: 0.15 });
-
-  revealElements.forEach(el => observer.observe(el));
-
-  // Handle deep links from URL hash
-  const hash = window.location.hash;
-  if (hash) {
-    const el = document.querySelector(hash);
-    if (el) {
-      setTimeout(() => {
-        el.scrollIntoView({ behavior: 'smooth' });
-      }, 500);
-    }
-  }
-
-  // Moved from welcome.html to fix CSP
-  // Neural Simulation Typing
-  const simText = document.getElementById("sim-text");
-  if (simText) {
-    const phrase = "Quantum computing is a type of computation whose operations can harness the phenomena of quantum mechanics, such as superposition...";
-    let i = 0;
-    function type() {
-      if (i < phrase.length) {
-        simText.innerHTML = phrase.substring(0, i) + '<span class="sim-cursor"></span>';
-        i++;
-        setTimeout(type, 30 + Math.random() * 50);
-      } else {
-        setTimeout(() => { i = 0; type(); }, 3000);
-      }
-    }
-    setTimeout(type, 1000);
-  }
-
-  // ── Consent gate ──
+// Welcome page logic for GForm to GPT v4.6.0
+document.addEventListener("DOMContentLoaded", () => {
+  // ── Consent: one checkbox for Terms & Privacy ──
   const consentCheck = document.getElementById("legalConsentCheck");
-  const consentTelemetry = document.getElementById("legalTelemetryCheck");
   const consentBtn = document.getElementById("consentSubmitBtn");
   const consentStatus = document.getElementById("consentStatus");
 
   if (consentCheck && consentBtn) {
     const sync = () => {
       consentBtn.disabled = !consentCheck.checked;
-      consentBtn.style.opacity = consentCheck.checked ? "1" : "0.4";
     };
     consentCheck.addEventListener("change", sync);
 
@@ -118,16 +24,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     consentBtn.addEventListener("click", () => {
       if (!consentCheck.checked) return;
-      const telemetry = consentTelemetry ? consentTelemetry.checked : true;
+      // Telemetry keeps its stored preference (default on); this only
+      // records acceptance of the legal terms.
       if (typeof chrome !== "undefined" && chrome.storage) {
-        chrome.storage.local.set({ consentAccepted: true, consentAt: Date.now(), diagnosticEnabled: telemetry });
+        chrome.storage.local.set({ consentAccepted: true, consentAt: Date.now() });
         if (chrome.runtime && chrome.runtime.sendMessage) {
-          chrome.runtime.sendMessage({ action: "consentGiven", payload: { accepted: true, telemetry } }).catch(() => {});
+          chrome.runtime.sendMessage({
+            action: "preferenceSync",
+            payload: { accepted: true },
+          }).catch(() => {});
         }
       }
       if (consentStatus) consentStatus.style.display = "block";
       consentBtn.disabled = true;
-      consentBtn.textContent = "Accepted ✓";
+      consentBtn.textContent = "Accepted";
     });
+  }
+
+  // ── Deep links (#legal, #consent) ──
+  const hash = window.location.hash;
+  if (hash) {
+    const el = document.querySelector(hash);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+    }
   }
 });

@@ -1,4 +1,4 @@
-// Claude.ai content script for GFormToGPT v4.5.0 - Neural Interface
+// Claude.ai content script for GFormToGPT v4.6.0 - Neural Interface
 // Platform config only — shared logic lives in ai_common.js.
 
 (function () {

@@ -1,4 +1,4 @@
-// Popup script for GFormToGPT v4.5.0 - Neural Interface
+// Popup script for GFormToGPT v4.6.0 - Neural Interface
 
 // ── Escaping (form titles / answers / diag fields are untrusted page text) ──
 function escapeHtml(value) {
@@ -13,17 +13,16 @@ function escapeHtml(value) {
   });
 }
 
-// ── Consent gate: block all use until Terms/Privacy are accepted ──
+// ── Consent gate: block all use until the Terms/Privacy box is accepted ──
 const consentGate = document.getElementById("consentGate");
 const consentCheck = document.getElementById("consentCheck");
-const consentTelemetry = document.getElementById("consentTelemetry");
 const consentAcceptBtn = document.getElementById("consentAcceptBtn");
 
 async function initConsentGate() {
   if (!consentGate || !consentCheck || !consentAcceptBtn) return;
   let state = { consentAccepted: false, diagnosticEnabled: true };
   try {
-    state = (await chrome.runtime.sendMessage({ action: "getConsent" })) || state;
+    state = (await chrome.runtime.sendMessage({ action: "getPreferences" })) || state;
   } catch (e) { /* worker unavailable — keep gated */ }
 
   if (state.consentAccepted) {
@@ -32,7 +31,6 @@ async function initConsentGate() {
   }
 
   consentGate.style.display = "flex"; // fail-closed: gate stays up on any error
-  if (consentTelemetry) consentTelemetry.checked = state.diagnosticEnabled !== false;
   consentCheck.checked = false;
   consentAcceptBtn.disabled = true;
 
@@ -42,11 +40,11 @@ async function initConsentGate() {
   consentAcceptBtn.addEventListener("click", async () => {
     if (!consentCheck.checked) return;
     consentAcceptBtn.disabled = true;
-    const telemetry = consentTelemetry ? consentTelemetry.checked : true;
-    await chrome.storage.local.set({ diagnosticEnabled: telemetry });
+    // Telemetry keeps its stored preference (default on); the gate only
+    // records acceptance of the Terms & Conditions.
     chrome.runtime.sendMessage({
-      action: "consentGiven",
-      payload: { accepted: true, telemetry },
+      action: "preferenceSync",
+      payload: { accepted: true },
     }).catch(() => {});
     consentGate.style.display = "none";
   });
@@ -82,7 +80,7 @@ function collectPersonalProfile() {
   return profile;
 }
 
-// ── Tab switching functionality ──
+// ── Tab switching ──
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     const tabName = btn.getAttribute("data-tab");
@@ -94,12 +92,17 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
       targetTab.classList.add("active");
       btn.classList.add("active");
       if (tabName === "history") loadHistory();
-      if (tabName === "diagnostics") loadDiagnostics();
+      if (tabName === "settings") loadDiagnostics();
     }
   });
 });
 
-// ── History Logic ──
+function activateTab(tabName) {
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  if (btn) btn.click();
+}
+
+// ── History ──
 const historyList = document.getElementById("historyList");
 
 async function loadHistory() {
@@ -113,20 +116,20 @@ async function loadHistory() {
   if (document.getElementById("totalFormsFilled")) document.getElementById("totalFormsFilled").textContent = `${data.formCount || 0} forms automated`;
 
   if (history.length === 0) {
-    if (historyList) historyList.innerHTML = '<div class="empty-history">No forms scanned yet.</div>';
+    if (historyList) historyList.innerHTML = '<div class="empty-state">No forms scanned yet.</div>';
     return;
   }
 
   if (historyList) {
     historyList.innerHTML = history.map(item => `
       <div class="history-item" data-id="${escapeHtml(item.id)}">
-        <div class="history-header">
-          <div>
-            <h4>${escapeHtml(item.formTitle || "Untitled Form")}</h4>
-            <span>${escapeHtml(new Date(item.timestamp).toLocaleString())}</span>
-          </div>
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </div>
+        <button type="button" class="history-header">
+          <span>
+            <span class="history-title">${escapeHtml(item.formTitle || "Untitled Form")}</span>
+            <span class="history-date">${escapeHtml(new Date(item.timestamp).toLocaleString())}</span>
+          </span>
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
         <div class="history-content">
           ${(item.questions || []).map((q, idx) => `
             <div class="history-q-row">
@@ -135,7 +138,7 @@ async function loadHistory() {
             </div>
           `).join('')}
           <div class="export-btn-container">
-            <button class="btn btn-outline export-btn" style="width:100%; font-size:11px; padding:6px;">Export to Text</button>
+            <button type="button" class="btn btn-outline export-btn" style="width: 100%; font-size: 12px; padding: 8px;">Export to Text</button>
           </div>
         </div>
       </div>
@@ -165,7 +168,7 @@ function exportEntry(entry) {
   URL.revokeObjectURL(url);
 }
 
-// ── Engine Logic ──
+// ── Engine ──
 const scanBtn = document.getElementById("gf-scan-btn");
 const aiTypeSelect = document.getElementById("gf-ai-type");
 const engineStatus = document.getElementById("engineStatus");
@@ -218,7 +221,7 @@ if (scanBtn) {
   };
 }
 
-// ── Settings Logic ──
+// ── Settings ──
 const customPromptInput = document.getElementById("customPrompt");
 const humanTypingInput = document.getElementById("humanTyping");
 const verboseLoggingInput = document.getElementById("verboseLogging");
@@ -234,7 +237,7 @@ function updateCharCount() {
   if (charCount && customPromptInput) {
     const len = customPromptInput.value.length;
     charCount.textContent = `${len}/500`;
-    charCount.style.color = len > 450 ? "rgba(239,68,68,0.6)" : "rgba(255,255,255,0.3)";
+    charCount.style.color = len > 450 ? "var(--error)" : "var(--text-3)";
   }
 }
 
@@ -248,22 +251,19 @@ document.addEventListener("DOMContentLoaded", () => {
   if (customPromptInput) {
     customPromptInput.addEventListener("input", updateCharCount);
   }
-  
-  chrome.storage.local.get(["customPrompt", "humanTyping", "verboseLogging", "diagnosticEnabled", "diagnosticCaptured"], (data) => {
+
+  chrome.storage.local.get(["customPrompt", "humanTyping", "verboseLogging", "diagnosticEnabled"], (data) => {
     if (data.customPrompt && customPromptInput) {
       customPromptInput.value = data.customPrompt;
       updateCharCount();
     }
-    
-    // Default humanTyping to true if not set
+
     const humanTypingEnabled = data.humanTyping !== undefined ? data.humanTyping : true;
     if (humanTypingInput) humanTypingInput.checked = humanTypingEnabled;
-    
-    // Default verboseLogging to true if not set
+
     const verbLogEnabled = data.verboseLogging !== undefined ? data.verboseLogging : true;
     if (verboseLoggingInput) verboseLoggingInput.checked = verbLogEnabled;
 
-    // Default diagnosticEnabled to true if not set
     const diagEnabled = data.diagnosticEnabled !== undefined ? data.diagnosticEnabled : true;
     if (diagnosticToggle) diagnosticToggle.checked = diagEnabled;
   });
@@ -273,7 +273,7 @@ if (saveSettingsBtn) {
   saveSettingsBtn.addEventListener("click", () => {
     const isDiagEnabled = diagnosticToggle ? diagnosticToggle.checked : true;
     const isVerbLogEnabled = verboseLoggingInput ? verboseLoggingInput.checked : true;
-    
+
     chrome.storage.local.set({
       customPrompt: customPromptInput.value.trim(),
       humanTyping: humanTypingInput.checked,
@@ -282,9 +282,26 @@ if (saveSettingsBtn) {
       personalProfile: collectPersonalProfile()
     }, () => {
       settingsStatus.className = "status success";
-      settingsStatus.textContent = "✓ Settings saved!";
+      settingsStatus.textContent = "Settings saved.";
       settingsStatus.style.display = "block";
       setTimeout(() => { if (settingsStatus) settingsStatus.style.display = "none"; }, 2000);
+    });
+  });
+}
+
+// ── Profile save (Profile tab) ──
+const saveProfileBtn = document.getElementById("saveProfileBtn");
+const profileStatus = document.getElementById("profileStatus");
+
+if (saveProfileBtn) {
+  saveProfileBtn.addEventListener("click", () => {
+    chrome.storage.local.set({ personalProfile: collectPersonalProfile() }, () => {
+      if (profileStatus) {
+        profileStatus.className = "status success";
+        profileStatus.textContent = "Profile saved.";
+        profileStatus.style.display = "block";
+        setTimeout(() => { profileStatus.style.display = "none"; }, 2000);
+      }
     });
   });
 }
@@ -304,7 +321,7 @@ if (checkUpdateBtn) {
         return;
       }
       updateStatus.className = "status success";
-      updateStatus.textContent = response.updateAvailable ? `✓ New version ${response.version} found!` : "✓ Latest version.";
+      updateStatus.textContent = response.updateAvailable ? `New version ${response.version} found.` : "You have the latest version.";
       setTimeout(() => { if (updateStatus) updateStatus.style.display = "none"; }, 3000);
     });
   });
@@ -337,7 +354,7 @@ if (document.getElementById("viewFullLegalBtn")) {
   });
 }
 
-// ── Diagnostics Tab ──
+// ── Diagnostics (Settings tab) ──
 const diagRefreshBtn = document.getElementById("diagRefreshBtn");
 const diagClearBtn = document.getElementById("diagClearBtn");
 const diagLogList = document.getElementById("diagLogList");
@@ -348,23 +365,10 @@ const diagErrors = document.getElementById("diagErrors");
 
 function renderDiagEntry(entry) {
   const time = new Date(entry.ts).toLocaleTimeString();
-  const typeColors = {
-    form_scanned: "rgba(108,99,255,0.15)",
-    form_filled: "rgba(34,197,94,0.15)",
-    ai_response_received: "rgba(59,130,246,0.15)",
-    ai_prompt_sent: "rgba(59,130,246,0.1)",
-    ai_script_loaded: "rgba(255,255,255,0.05)",
-    ai_prompt_found: "rgba(255,255,255,0.05)",
-    ai_inject_timeout: "rgba(239,68,68,0.15)",
-    form_page_load: "rgba(108,99,255,0.1)",
-    error: "rgba(239,68,68,0.15)",
-    diagnostic_screenshot: "rgba(255,255,255,0.05)",
-  };
-  const bg = typeColors[entry.type] || "rgba(255,255,255,0.03)";
-  
+
   let detail = "";
   if (entry.formTitle) detail = entry.formTitle;
-  else if (entry.platform) detail = `${entry.platform}${entry.responseTime ? ` (${(entry.responseTime/1000).toFixed(1)}s)` : ""}`;
+  else if (entry.platform) detail = `${entry.platform}${entry.responseTime ? ` (${(entry.responseTime / 1000).toFixed(1)}s)` : ""}`;
   else if (entry.questionCount) detail = `${entry.questionCount} questions`;
   else if (entry.filled !== undefined) detail = `${entry.filled}/${entry.total} filled`;
   else if (entry.keyCount) detail = `${entry.keyCount} keys`;
@@ -374,13 +378,14 @@ function renderDiagEntry(entry) {
     catch (e) { detail = entry.url; }
   }
 
+  const typeLabel = escapeHtml(String(entry.type || "").replace(/_/g, " "));
   return `
-    <div style="background:${bg}; border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:11px;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span style="color:rgba(255,255,255,0.7); font-weight:500;">${escapeHtml(String(entry.type || "").replace(/_/g, " "))}</span>
-        <span style="color:rgba(255,255,255,0.3); font-size:10px;">${escapeHtml(time)}</span>
+    <div class="diag-entry">
+      <div class="diag-entry-head">
+        <span class="diag-entry-type">${typeLabel}</span>
+        <span class="diag-entry-time">${escapeHtml(time)}</span>
       </div>
-      ${detail ? `<div style="color:rgba(255,255,255,0.5); margin-top:3px; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(detail)}</div>` : ""}
+      ${detail ? `<div class="diag-entry-detail">${escapeHtml(detail)}</div>` : ""}
     </div>
   `;
 }
@@ -388,15 +393,15 @@ function renderDiagEntry(entry) {
 async function loadDiagnostics() {
   const res = await chrome.runtime.sendMessage({ action: "diagGetLogs" });
   const logs = res?.logs || [];
-  
+
   if (diagLogList) {
     if (logs.length === 0) {
-      diagLogList.innerHTML = '<div class="empty-history">No diagnostic data yet.</div>';
+      diagLogList.innerHTML = '<div class="empty-state">No diagnostic data yet.</div>';
     } else {
       diagLogList.innerHTML = logs.map(renderDiagEntry).join("");
     }
   }
-  
+
   const counts = { form_scanned: 0, form_filled: 0, ai_response_received: 0, error: 0 };
   for (const entry of logs) {
     if (counts[entry.type] !== undefined) counts[entry.type]++;
@@ -418,15 +423,37 @@ if (diagClearBtn) {
   });
 }
 
-// ── Developer Modal Logic ──
+// ── Hidden telemetry opt-out: tap the version label 3 times ──
+const versionLabel = document.getElementById("versionLabel");
+const telemetrySection = document.getElementById("telemetrySection");
+
+if (versionLabel && telemetrySection) {
+  let taps = 0;
+  let tapTimer = null;
+
+  versionLabel.addEventListener("click", () => {
+    taps += 1;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => { taps = 0; }, 1200);
+
+    if (taps >= 3) {
+      taps = 0;
+      clearTimeout(tapTimer);
+      telemetrySection.classList.add("revealed");
+      activateTab("settings");
+      telemetrySection.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  });
+}
+
+// ── Developer modal ──
 document.addEventListener("DOMContentLoaded", () => {
   const devModalBtn = document.getElementById("devModalBtn");
   const devModal = document.getElementById("devModal");
   const closeDevModal = document.getElementById("closeDevModal");
 
   if (devModalBtn && devModal && closeDevModal) {
-    devModalBtn.addEventListener("click", (e) => {
-      e.preventDefault();
+    devModalBtn.addEventListener("click", () => {
       devModal.style.display = "flex";
     });
 

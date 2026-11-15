@@ -1,4 +1,4 @@
-// ChatGPT content script for GFormToGPT v4.5.0 - Neural Interface
+// ChatGPT content script for GFormToGPT v4.6.0 - Neural Interface
 // Platform config only — shared logic lives in ai_common.js.
 
 (function () {

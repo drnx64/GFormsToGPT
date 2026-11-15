@@ -1,4 +1,4 @@
-// Shared AI adapter for GFormToGPT v4.5.0 - Neural Interface
+// Shared AI adapter for GFormToGPT v4.6.0 - Neural Interface
 // Loaded before chatgpt_content.js / claude_content.js / gemini_content.js in
 // manifest.json so all three platforms share one implementation. Each platform
 // file supplies its own selectors and platform-specific extras.

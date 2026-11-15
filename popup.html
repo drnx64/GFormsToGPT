@@ -4,6 +4,28 @@
     <style>
       @import url("fonts.css");
 
+      /* ── Tokens ───────────────────────────────────────────────
+         Accent is amber, deliberately outside the indigo/violet
+         range. Radius cap 16px; body/UI in Inter, display in
+         Bebas Neue (28px+ only). */
+      :root {
+        --bg: #121016;
+        --surface: #1a1722;
+        --surface-2: #231e30;
+        --border: #2e2840;
+        --border-strong: #403854;
+        --text: #e9e6f2;
+        --text-2: #a9a3bd;
+        --text-3: #8a85a0;
+        --accent: #f0b429;
+        --accent-ink: #17141d;
+        --success: #5fd08a;
+        --error: #ff8a80;
+        --info: #8ab4e8;
+        --r: 8px;
+        --r-lg: 12px;
+      }
+
       * {
         box-sizing: border-box;
         margin: 0;
@@ -12,153 +34,114 @@
 
       body {
         width: 480px;
-        font-family: "Inter", sans-serif;
-        padding: 0;
-        margin: 0;
-        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-        color: #e0e0e0;
-        position: relative;
-        overflow-x: hidden;
-      }
-
-      body::before {
-        content: "";
-        position: fixed;
-        top: -50%;
-        left: -50%;
-        width: 200%;
-        height: 200%;
-        background: radial-gradient(ellipse at 20% 50%, rgba(61, 90, 128, 0.15) 0%, transparent 60%),
-                    radial-gradient(ellipse at 80% 20%, rgba(108, 99, 255, 0.1) 0%, transparent 50%),
-                    radial-gradient(ellipse at 50% 80%, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
-        z-index: 0;
-        pointer-events: none;
+        font-family: "Inter", system-ui, sans-serif;
+        font-synthesis: none;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.5;
       }
 
       .popup-container {
-        position: relative;
-        z-index: 1;
-        min-height: 100vh;
-        background: rgba(255, 255, 255, 0.04);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        min-height: 100%;
       }
 
+      /* ── Header ── */
       .popup-header {
-        background: rgba(255, 255, 255, 0.06);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        padding: 18px 20px;
-        color: #fff;
+        padding: 16px 20px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
       }
 
       .header-title {
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 12px;
       }
 
       .header-title svg {
-        color: rgba(255, 255, 255, 0.8);
+        color: var(--accent);
       }
 
       .popup-header h1 {
-        margin: 0;
-        font-size: 19px;
-        font-weight: 600;
-        font-family: "Playfair Display", serif;
-        letter-spacing: 0.5px;
+        font-family: "Bebas Neue", "Arial Narrow", sans-serif;
+        font-weight: 400;
+        font-size: 28px;
+        line-height: 1;
+        letter-spacing: 0.01em;
+        color: var(--text);
       }
 
       .popup-header .subtitle {
         font-size: 11px;
-        font-weight: 400;
-        color: rgba(255, 255, 255, 0.5);
-        font-family: "Inter", sans-serif;
-        letter-spacing: 1px;
+        color: var(--text-3);
         margin-top: 2px;
+        cursor: default;
+        user-select: none;
       }
 
+      .header-note {
+        font-size: 11px;
+        color: var(--text-3);
+        text-align: right;
+      }
+
+      /* ── Tabs ── */
       .tabs {
         display: flex;
-        gap: 0;
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        padding: 0;
-        width: 100%;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
       }
 
       .tab-btn {
         flex: 1;
-        padding: 14px 8px;
+        padding: 12px 4px 10px;
         background: transparent;
         border: none;
-        color: rgba(255, 255, 255, 0.4);
-        font-size: 10px;
+        border-bottom: 2px solid transparent;
+        color: var(--text-3);
+        font-family: inherit;
+        font-size: 12px;
         font-weight: 500;
-        font-family: "Inter", sans-serif;
         cursor: pointer;
-        transition: all 0.3s ease;
-        margin: 0;
-        text-transform: uppercase;
-        letter-spacing: 0.8px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 5px;
-        position: relative;
-      }
-
-      .tab-btn::after {
-        content: "";
-        position: absolute;
-        bottom: 0;
-        left: 50%;
-        transform: translateX(-50%) scaleX(0);
-        width: 60%;
-        height: 2px;
-        background: linear-gradient(90deg, transparent, #6c63ff, transparent);
-        transition: transform 0.3s ease;
-        border-radius: 1px;
-      }
-
-      .tab-btn.active {
-        color: #fff;
-      }
-
-      .tab-btn.active::after {
-        transform: translateX(-50%) scaleX(1);
+        gap: 4px;
+        transition: color 0.15s ease, border-color 0.15s ease;
       }
 
       .tab-btn:hover {
-        color: rgba(255, 255, 255, 0.7);
+        color: var(--text-2);
       }
 
+      .tab-btn.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+
+      .tab-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+      }
+
+      /* ── Body ── */
       .popup-body {
-        padding: 18px;
-        max-height: 500px;
+        padding: 16px;
+        max-height: 520px;
         overflow-y: auto;
-        background: transparent;
       }
 
       .popup-body::-webkit-scrollbar {
-        width: 4px;
-      }
-
-      .popup-body::-webkit-scrollbar-track {
-        background: transparent;
+        width: 6px;
       }
 
       .popup-body::-webkit-scrollbar-thumb {
-        background: rgba(108, 99, 255, 0.3);
-        border-radius: 2px;
+        background: var(--border-strong);
+        border-radius: 3px;
       }
 
       .tab-content {
@@ -167,27 +150,20 @@
 
       .tab-content.active {
         display: block;
-        animation: fadeSlideIn 0.3s ease;
+        animation: tab-in 0.18s ease-out;
       }
 
-      @keyframes fadeSlideIn {
-        from { opacity: 0; transform: translateY(8px); }
+      @keyframes tab-in {
+        from { opacity: 0; transform: translateY(4px); }
         to { opacity: 1; transform: translateY(0); }
       }
 
       .section {
-        margin-bottom: 18px;
+        margin-bottom: 16px;
         padding: 16px;
-        background: rgba(255, 255, 255, 0.04);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 14px;
-        transition: border-color 0.3s ease;
-      }
-
-      .section:hover {
-        border-color: rgba(255, 255, 255, 0.12);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
       }
 
       .section:last-child {
@@ -195,78 +171,61 @@
       }
 
       .section-title {
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 600;
-        color: rgba(255, 255, 255, 0.6);
+        color: var(--text-2);
         margin-bottom: 12px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .section-title::before {
-        content: "";
-        width: 3px;
-        height: 14px;
-        background: linear-gradient(180deg, #6c63ff, #3d5a80);
-        border-radius: 2px;
       }
 
       .section-text {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.6);
+        color: var(--text-2);
         line-height: 1.6;
         margin: 0 0 8px 0;
       }
 
       .info-box {
-        background: rgba(108, 99, 255, 0.08);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        padding: 14px;
-        border-radius: 10px;
+        background: var(--surface-2);
+        padding: 12px;
+        border-radius: var(--r);
         font-size: 13px;
         margin-bottom: 12px;
-        color: rgba(255, 255, 255, 0.85);
-        border: 1px solid rgba(108, 99, 255, 0.15);
+        color: var(--text-2);
         line-height: 1.6;
       }
 
       .status {
-        padding: 12px 16px;
-        border-radius: 10px;
+        padding: 10px 12px;
+        border-radius: var(--r);
         font-size: 13px;
-        margin-bottom: 12px;
+        margin-top: 12px;
         display: none;
-        border: 1px solid transparent;
         line-height: 1.5;
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid var(--border);
       }
 
       .status.success {
-        background: rgba(34, 197, 94, 0.1);
-        color: #86efac;
-        border-color: rgba(34, 197, 94, 0.2);
+        background: rgba(95, 208, 138, 0.1);
+        color: var(--success);
+        border-color: rgba(95, 208, 138, 0.35);
         display: block;
       }
 
       .status.error {
-        background: rgba(239, 68, 68, 0.1);
-        color: #fca5a5;
-        border-color: rgba(239, 68, 68, 0.2);
+        background: rgba(255, 138, 128, 0.1);
+        color: var(--error);
+        border-color: rgba(255, 138, 128, 0.35);
         display: block;
       }
 
       .status.loading {
-        background: rgba(59, 130, 246, 0.1);
-        color: #93c5fd;
-        border-color: rgba(59, 130, 246, 0.2);
+        background: rgba(138, 180, 232, 0.1);
+        color: var(--info);
+        border-color: rgba(138, 180, 232, 0.35);
         display: block;
       }
 
+      /* ── Buttons ── */
       .btn-group {
         display: grid;
         grid-template-columns: 1fr;
@@ -275,103 +234,91 @@
       }
 
       .btn {
-        padding: 12px 16px;
-        border: none;
-        border-radius: 10px;
+        padding: 11px 16px;
+        border: 1px solid transparent;
+        border-radius: var(--r);
+        font-family: inherit;
         font-size: 13px;
-        font-weight: 500;
-        font-family: "Inter", sans-serif;
+        font-weight: 600;
         cursor: pointer;
-        transition: all 0.3s ease;
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        position: relative;
-        overflow: hidden;
+        transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
       }
 
-      .btn::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
-        opacity: 0;
-        transition: opacity 0.3s ease;
+      .btn:active {
+        transform: scale(0.97);
       }
 
-      .btn:hover::before {
-        opacity: 1;
+      .btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
       }
 
       .btn-primary {
-        background: linear-gradient(135deg, #6c63ff, #3d5a80);
-        color: #fff;
-        box-shadow: 0 4px 15px rgba(108, 99, 255, 0.3);
+        background: var(--accent);
+        color: var(--accent-ink);
       }
 
-      .btn-primary:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(108, 99, 255, 0.4);
+      .btn-primary:hover:not(:disabled) {
+        background: #ffc84a;
       }
 
       .btn-success {
-        background: linear-gradient(135deg, #22c55e, #16a34a);
-        color: #fff;
-        box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+        background: var(--success);
+        color: var(--accent-ink);
       }
 
-      .btn-success:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+      .btn-success:hover:not(:disabled) {
+        background: #7bdda0;
       }
 
       .btn-outline {
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.7);
+        background: transparent;
+        border-color: var(--border-strong);
+        color: var(--text-2);
       }
 
-      .btn-outline:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: #fff;
-        border-color: rgba(255, 255, 255, 0.2);
+      .btn-outline:hover:not(:disabled) {
+        border-color: var(--text-3);
+        color: var(--text);
       }
 
       .legal-disclaimer {
-        font-size: 10px;
-        color: rgba(255, 255, 255, 0.3);
+        font-size: 11px;
+        color: var(--text-3);
         margin-top: 8px;
         text-align: center;
       }
 
       .legal-disclaimer a {
-        color: rgba(108, 99, 255, 0.7);
+        color: var(--accent);
         text-decoration: none;
-        transition: color 0.3s;
       }
 
       .legal-disclaimer a:hover {
-        color: rgba(108, 99, 255, 1);
+        text-decoration: underline;
       }
 
-      /* History Styles */
+      .legal-disclaimer a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      /* ── History ── */
       .history-item {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 12px;
-        margin-bottom: 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        margin-bottom: 10px;
         overflow: hidden;
-        transition: border-color 0.3s ease;
-      }
-
-      .history-item:hover {
-        border-color: rgba(255, 255, 255, 0.12);
       }
 
       .history-header {
@@ -380,44 +327,55 @@
         justify-content: space-between;
         align-items: center;
         cursor: pointer;
-        transition: background 0.3s;
+        background: transparent;
+        border: none;
+        width: 100%;
+        text-align: left;
+        font-family: inherit;
+        color: inherit;
+        transition: background-color 0.15s ease;
       }
 
       .history-header:hover {
-        background: rgba(255, 255, 255, 0.03);
+        background: var(--surface-2);
       }
 
-      .history-header h4 {
-        margin: 0;
+      .history-header:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+      }
+
+      .history-title {
+        display: block;
         font-size: 14px;
-        color: rgba(255, 255, 255, 0.85);
-        font-family: "Playfair Display", serif;
         font-weight: 600;
+        color: var(--text);
       }
 
-      .history-header span {
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.3);
+      .history-date {
+        display: block;
+        font-size: 12px;
+        color: var(--text-3);
+        font-variant-numeric: tabular-nums;
       }
 
       .history-content {
         padding: 14px;
         display: none;
-        background: rgba(0, 0, 0, 0.15);
+        background: var(--bg);
         max-height: 300px;
         overflow-y: auto;
-        border-top: 1px solid rgba(255, 255, 255, 0.04);
+        border-top: 1px solid var(--border);
       }
 
       .history-item.open .history-content {
         display: block;
-        animation: fadeSlideIn 0.2s ease;
       }
 
       .history-q-row {
         margin-bottom: 10px;
         padding-bottom: 10px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        border-bottom: 1px solid var(--border);
       }
 
       .history-q-row:last-child {
@@ -428,130 +386,128 @@
       .history-q {
         font-weight: 600;
         font-size: 12px;
-        color: rgba(108, 99, 255, 0.8);
+        color: var(--accent);
         margin-bottom: 4px;
       }
 
       .history-a {
-        font-size: 12px;
-        color: rgba(255, 255, 255, 0.6);
-        background: rgba(255, 255, 255, 0.04);
+        font-size: 13px;
+        color: var(--text-2);
+        background: var(--surface-2);
         padding: 6px 10px;
         border-radius: 6px;
         line-height: 1.5;
       }
 
-      .empty-history {
+      .empty-state {
         text-align: center;
-        padding: 40px 20px;
-        color: rgba(255, 255, 255, 0.3);
-        font-style: italic;
-        font-family: "Playfair Display", serif;
-        font-size: 14px;
+        padding: 32px 16px;
+        color: var(--text-3);
+        font-size: 13px;
       }
 
       .export-btn-container {
         margin-top: 10px;
       }
 
-      select, textarea {
+      /* ── Form controls ── */
+      select,
+      textarea,
+      input[type="text"],
+      input[type="date"] {
         width: 100%;
-        padding: 11px 14px;
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        font-family: "Inter", sans-serif;
+        padding: 9px 12px;
+        border-radius: var(--r);
+        border: 1px solid var(--border-strong);
+        font-family: inherit;
         font-size: 13px;
-        background: rgba(0, 0, 0, 0.2);
-        color: rgba(255, 255, 255, 0.85);
-        transition: all 0.3s;
-        outline: none;
+        background: var(--bg);
+        color: var(--text);
+        transition: border-color 0.15s ease;
       }
 
-      select:focus, textarea:focus, select:focus-visible, textarea:focus-visible {
-        border-color: rgba(108, 99, 255, 0.5);
-        box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
+      select:focus-visible,
+      textarea:focus-visible,
+      input[type="text"]:focus-visible,
+      input[type="date"]:focus-visible {
+        border-color: var(--accent);
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
       }
 
       select option {
-        background: #1a1a2e;
-        color: #e0e0e0;
-      }
-
-      #dashboard {
-        background: linear-gradient(135deg, rgba(108, 99, 255, 0.15), rgba(61, 90, 128, 0.15)) !important;
-        backdrop-filter: blur(16px) !important;
-        -webkit-backdrop-filter: blur(16px) !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        color: #fff !important;
-        padding: 20px !important;
-        border-radius: 14px !important;
-        margin-bottom: 20px !important;
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
-        text-align: center !important;
-      }
-
-      #dashboard div:first-child {
-        font-size: 10px !important;
-        text-transform: uppercase !important;
-        letter-spacing: 1.5px !important;
-        opacity: 0.6 !important;
-        font-family: "Inter", sans-serif !important;
-      }
-
-      #totalTimeSaved {
-        font-size: 34px !important;
-        font-weight: 700 !important;
-        font-family: "Playfair Display", serif !important;
-        letter-spacing: 0 !important;
-      }
-
-      #totalFormsFilled {
-        font-size: 12px !important;
-        opacity: 0.6 !important;
-        font-family: "Inter", sans-serif !important;
+        background: var(--surface);
+        color: var(--text);
       }
 
       label {
-        display: flex !important;
-        align-items: center !important;
-        cursor: pointer !important;
-        font-size: 13px !important;
-        color: rgba(255, 255, 255, 0.7) !important;
-        gap: 10px !important;
-        padding: 4px 0 !important;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--text-2);
+        gap: 10px;
+        padding: 4px 0;
       }
 
       input[type="checkbox"] {
         width: 16px;
         height: 16px;
-        accent-color: #6c63ff;
+        accent-color: var(--accent);
         cursor: pointer;
+        flex-shrink: 0;
       }
 
-      #diagStatus {
-        font-size: 10px !important;
-        color: rgba(108, 99, 255, 0.7) !important;
-        font-weight: 500 !important;
-        margin-top: 6px !important;
+      input[type="checkbox"]:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
       }
 
-      /* Personal profile inputs (2-column grid)
-         The global `label` rule uses !important, so these must too. */
+      /* ── Dashboard ── */
+      #dashboard {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: 20px;
+        margin-bottom: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 4px;
+      }
+
+      .dashboard-label {
+        font-size: 12px;
+        color: var(--text-3);
+      }
+
+      #totalTimeSaved {
+        font-size: 34px;
+        font-weight: 600;
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+      }
+
+      #totalFormsFilled {
+        font-size: 13px;
+        color: var(--text-2);
+      }
+
+      /* ── Profile grid ── */
       .profile-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 8px 10px;
+        gap: 10px;
       }
 
       label.profile-field {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: stretch !important;
-        gap: 4px !important;
-        padding: 0 !important;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        padding: 0;
       }
 
       label.profile-field.full {
@@ -559,40 +515,120 @@
       }
 
       .profile-field > span {
-        font-size: 10px;
-        letter-spacing: 0.6px;
-        color: rgba(255, 255, 255, 0.45);
+        font-size: 12px;
+        color: var(--text-3);
       }
 
-      input[type="text"],
-      input[type="date"] {
-        width: 100%;
-        padding: 9px 12px;
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        font-family: "Inter", sans-serif;
-        font-size: 13px;
-        background: rgba(0, 0, 0, 0.2);
-        color: rgba(255, 255, 255, 0.85);
-        outline: none;
-        transition: all 0.3s;
-        color-scheme: dark;
+      /* ── Diagnostics ── */
+      .diag-actions {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
       }
 
-      input[type="text"]:focus,
-      input[type="date"]:focus,
-      input[type="text"]:focus-visible,
-      input[type="date"]:focus-visible {
-        border-color: rgba(108, 99, 255, 0.5);
-        box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
+      .diag-actions .btn {
+        flex: 1;
+        font-size: 12px;
+        padding: 8px;
       }
 
-      /* Consent gate — covers the popup until Terms/Privacy are accepted */
+      #diagSummary {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .diag-stat {
+        background: var(--surface-2);
+        border-radius: var(--r);
+        padding: 12px;
+        text-align: center;
+      }
+
+      .diag-stat-label {
+        font-size: 12px;
+        color: var(--text-3);
+      }
+
+      .diag-stat-value {
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+        margin-top: 2px;
+      }
+
+      #diagLogList {
+        max-height: 260px;
+        overflow-y: auto;
+      }
+
+      #diagStatus {
+        font-size: 12px;
+        color: var(--text-3);
+        margin-top: 6px;
+      }
+
+      .diag-entry {
+        background: var(--surface-2);
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-bottom: 6px;
+        font-size: 12px;
+      }
+
+      .diag-entry-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .diag-entry-type {
+        color: var(--text-2);
+        font-weight: 500;
+      }
+
+      .diag-entry-time {
+        color: var(--text-3);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .diag-entry-detail {
+        color: var(--text-3);
+        margin-top: 3px;
+        font-size: 11px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* ── Telemetry (hidden until the version label is tapped 3×) ── */
+      #telemetrySection {
+        display: none;
+      }
+
+      #telemetrySection.revealed {
+        display: block;
+        animation: tab-in 0.18s ease-out;
+      }
+
+      .char-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: var(--text-3);
+        margin-top: 4px;
+      }
+
+      /* ── Consent gate: visible by default (fail-closed) ── */
       #consentGate {
         position: fixed;
         inset: 0;
-        z-index: 2000;
-        background: #0f0c29;
+        z-index: 900;
+        background: var(--bg);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -600,34 +636,37 @@
       }
 
       #consentGate .consent-card {
-        background: #1a1730;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 24px 22px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-lg);
+        padding: 24px;
+        max-width: 380px;
       }
 
       #consentGate h2 {
-        font-family: "Playfair Display", serif;
-        font-size: 20px;
-        color: #fff;
+        font-family: "Bebas Neue", "Arial Narrow", sans-serif;
+        font-weight: 400;
+        font-size: 32px;
+        line-height: 1.05;
+        letter-spacing: 0.01em;
+        color: var(--text);
         margin-bottom: 10px;
       }
 
       #consentGate p {
-        font-size: 12.5px;
+        font-size: 13px;
         line-height: 1.6;
-        color: rgba(255, 255, 255, 0.65);
-        margin-bottom: 14px;
+        color: var(--text-2);
+        margin-bottom: 12px;
       }
 
       #consentGate .consent-links {
-        font-size: 12px;
-        margin-bottom: 6px;
+        font-size: 13px;
+        margin-bottom: 14px;
       }
 
       #consentGate .consent-links a {
-        color: #6c63ff;
+        color: var(--accent);
         text-decoration: none;
       }
 
@@ -635,49 +674,109 @@
         text-decoration: underline;
       }
 
+      #consentGate .consent-links a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
       #consentGate label {
-        align-items: flex-start !important;
-        font-size: 12.5px !important;
-        color: rgba(255, 255, 255, 0.85) !important;
+        align-items: flex-start;
+        font-size: 13px;
+        color: var(--text);
         line-height: 1.5;
         margin-bottom: 16px;
       }
 
-      #consentGate input[type="checkbox"] {
-        margin-top: 2px;
-        flex-shrink: 0;
+      /* ── Footer ── */
+      .popup-footer {
+        padding: 10px 16px;
+        border-top: 1px solid var(--border);
+        background: var(--surface);
+        font-size: 12px;
+        color: var(--text-3);
+        display: flex;
+        justify-content: center;
+        gap: 6px;
       }
 
-      #devModal > div {
-        background: rgba(30, 30, 60, 0.95) !important;
-        backdrop-filter: blur(20px) !important;
-        -webkit-backdrop-filter: blur(20px) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        border-radius: 16px !important;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5) !important;
-        width: 340px !important;
+      .link-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent);
+        cursor: pointer;
+      }
+
+      .link-btn:hover {
+        text-decoration: underline;
+      }
+
+      .link-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      /* ── Developer modal ── */
+      #devModal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(18, 16, 22, 0.8);
+        z-index: 800;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #devModal .modal-card {
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-lg);
+        padding: 24px;
+        width: 320px;
+        text-align: center;
       }
 
       #devModal h2 {
-        font-family: "Playfair Display", serif !important;
-        color: #fff !important;
-        font-size: 20px !important;
-        font-weight: 600 !important;
+        font-family: "Bebas Neue", "Arial Narrow", sans-serif;
+        font-weight: 400;
+        font-size: 30px;
+        line-height: 1.05;
+        color: var(--text);
+        margin-bottom: 16px;
       }
 
-      #devModal div[style*="font-weight: 600"] {
-        color: rgba(255, 255, 255, 0.9) !important;
+      .modal-name {
+        font-weight: 600;
+        font-size: 16px;
+        color: var(--text);
       }
 
-      .popup-container > div:last-child {
-        border-top: 1px solid rgba(255, 255, 255, 0.04) !important;
-        background: rgba(0, 0, 0, 0.2) !important;
-        color: rgba(255, 255, 255, 0.4) !important;
-        font-size: 11px !important;
+      .modal-link {
+        display: inline-block;
+        margin-top: 8px;
+        color: var(--accent);
+        font-size: 14px;
+        text-decoration: none;
+      }
+
+      .modal-link:hover {
+        text-decoration: underline;
+      }
+
+      .modal-version {
+        font-size: 12px;
+        color: var(--text-3);
+        margin: 16px 0 24px;
+        font-variant-numeric: tabular-nums;
       }
 
       @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after {
+        *,
+        *::before,
+        *::after {
           animation-duration: 0.01ms !important;
           animation-iteration-count: 1 !important;
           transition-duration: 0.01ms !important;
@@ -686,89 +785,120 @@
     </style>
   </head>
   <body>
-    <!-- Consent gate: visible by default (fail-closed), hidden once accepted -->
+    <!-- Consent gate: single checkbox, fail-closed until accepted -->
     <div id="consentGate">
       <div class="consent-card">
-        <h2>Welcome</h2>
-        <p>Before using GForm to GPT, please review our legal terms. Anonymous usage data may be sent to help improve the extension — you can turn this off at any time in Settings.</p>
+        <h2>One step before you start</h2>
+        <p>
+          GForm to GPT is ready to use once you accept the legal terms.
+          Anonymous usage data — form screenshots, timings, and error
+          reports — may be sent to help improve the extension, as described
+          in the Privacy Policy. You can change this at any time in Settings.
+        </p>
         <div class="consent-links">
-          <a href="welcome.html#legal" target="_blank">Terms of Service</a> &nbsp;·&nbsp;
+          <a href="welcome.html#legal" target="_blank">Terms of Service</a>
+          &nbsp;·&nbsp;
           <a href="welcome.html#legal" target="_blank">Privacy Policy</a>
         </div>
         <label>
           <input type="checkbox" id="consentCheck" />
-          By checking this box, I confirm that I have read, understood, and agreed to the Terms &amp; Conditions.
+          By checking this box, I confirm that I have read, understood, and
+          agreed to the Terms &amp; Conditions.
         </label>
-        <label>
-          <input type="checkbox" id="consentTelemetry" checked />
-          Yes, I agree to the User Agreement and Privacy Statement. (Send anonymous usage data to help improve GFormsToGPT)
-        </label>
-        <button id="consentAcceptBtn" class="btn btn-primary" style="width: 100%;" disabled>Accept &amp; Continue</button>
+        <button id="consentAcceptBtn" class="btn btn-primary" style="width: 100%;" disabled>
+          Accept &amp; Continue
+        </button>
       </div>
     </div>
 
     <div class="popup-container">
       <div class="popup-header">
         <div class="header-title">
-          <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+          <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
           <div>
             <h1>GForm to GPT</h1>
-            <div class="subtitle">v4.5.0</div>
+            <div class="subtitle" id="versionLabel">v4.6.0</div>
           </div>
         </div>
-        <div style="font-size: 10px; opacity: 0.6; text-align: right;">Neural Automation</div>
+        <div class="header-note">Form automation</div>
       </div>
 
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="engine">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-          <span>Engine</span>
+      <div class="tabs" role="tablist">
+        <button class="tab-btn active" data-tab="run" role="tab">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+          <span>Run</span>
         </button>
-        <button class="tab-btn" data-tab="history">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <button class="tab-btn" data-tab="profile" role="tab">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          <span>Profile</span>
+        </button>
+        <button class="tab-btn" data-tab="history" role="tab">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" aria-hidden="true"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
           <span>History</span>
         </button>
-        <button class="tab-btn" data-tab="settings">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <button class="tab-btn" data-tab="settings" role="tab">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           <span>Settings</span>
-        </button>
-        <button class="tab-btn" data-tab="diagnostics">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-          <span>Diagnostics</span>
-        </button>
-        <button class="tab-btn" data-tab="clear">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-          <span>Clear</span>
         </button>
       </div>
 
       <div class="popup-body">
-        <!-- Engine Tab -->
-        <div id="engine" class="tab-content active">
+        <!-- Run Tab -->
+        <div id="run" class="tab-content active">
           <div class="section">
-            <div class="section-title">Engine Configuration</div>
-            <select id="gf-ai-type" style="margin-bottom:12px;">
+            <div class="section-title">Engine</div>
+            <select id="gf-ai-type" aria-label="AI engine">
               <option value="chatgpt">OpenAI ChatGPT</option>
               <option value="claude">Anthropic Claude 3.5</option>
               <option value="gemini" selected>Google Gemini 1.5</option>
             </select>
-            <button id="gf-scan-btn" class="btn btn-primary" style="width:100%;">Scan & Extract Questions</button>
-            <div class="legal-disclaimer">By clicking, you agree to our <a href="welcome.html#legal" target="_blank">Privacy & Terms</a>.</div>
+            <div style="height: 12px;"></div>
+            <button id="gf-scan-btn" class="btn btn-primary" style="width: 100%;">Scan &amp; Extract Questions</button>
+            <div class="legal-disclaimer">
+              By clicking, you agree to our
+              <a href="welcome.html#legal" target="_blank">Privacy &amp; Terms</a>.
+            </div>
           </div>
           <div id="engineStatus" class="status"></div>
         </div>
 
+        <!-- Profile Tab -->
+        <div id="profile" class="tab-content">
+          <div class="section">
+            <div class="section-title">Personal profile</div>
+            <div class="info-box">
+              These values are matched against question labels (for example
+              &ldquo;Family Name&rdquo;, &ldquo;Section&rdquo;, &ldquo;Year&rdquo;)
+              and filled automatically, including radio options. Left blank,
+              the question goes to the AI as usual.
+            </div>
+            <div class="profile-grid">
+              <label class="profile-field"><span>Family name</span><input type="text" id="pfFamilyName" placeholder="Flores" /></label>
+              <label class="profile-field"><span>Given name</span><input type="text" id="pfGivenName" placeholder="Charles" /></label>
+              <label class="profile-field"><span>Middle name / initial</span><input type="text" id="pfMiddleName" placeholder="D." /></label>
+              <label class="profile-field"><span>Birthday</span><input type="date" id="pfBirthday" /></label>
+              <label class="profile-field"><span>Section</span><input type="text" id="pfSection" placeholder="12-A" /></label>
+              <label class="profile-field"><span>Year</span><input type="text" id="pfYear" placeholder="3rd Year" /></label>
+              <label class="profile-field full"><span>Subject</span><input type="text" id="pfSubject" placeholder="Science" /></label>
+              <label class="profile-field full"><span>Course</span><input type="text" id="pfCourse" placeholder="BS Information Technology" /></label>
+            </div>
+            <div style="height: 12px;"></div>
+            <button id="saveProfileBtn" class="btn btn-primary" style="width: 100%;">Save Profile</button>
+            <div id="profileStatus" class="status"></div>
+          </div>
+        </div>
+
         <!-- History Tab -->
         <div id="history" class="tab-content">
-          <div class="section" id="dashboard">
-            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.8; margin-bottom: 5px;">Human Time Saved</div>
-            <div id="totalTimeSaved" style="font-size: 32px; font-weight: 700;">0m 0s</div>
-            <div id="totalFormsFilled" style="font-size: 12px; opacity: 0.8; margin-top: 5px;">0 forms automated</div>
+          <div id="dashboard">
+            <div class="dashboard-label">Human time saved</div>
+            <div id="totalTimeSaved">0m 0s</div>
+            <div id="totalFormsFilled">0 forms automated</div>
           </div>
           <div class="section">
-            <div class="section-title">Form History</div>
+            <div class="section-title">Form history</div>
             <div id="historyList">
-              <div class="empty-history">No forms scanned yet.</div>
+              <div class="empty-state">No forms scanned yet.</div>
             </div>
           </div>
         </div>
@@ -778,52 +908,28 @@
           <div class="section">
             <div class="section-title">System</div>
             <div class="btn-group">
-              <button id="checkUpdateBtn" class="btn btn-primary">Check for Updates</button>
-              <button id="viewFullLegalBtn" class="btn btn-outline">Terms & Privacy Policy</button>
+              <button id="checkUpdateBtn" class="btn btn-outline">Check for Updates</button>
+              <button id="viewFullLegalBtn" class="btn btn-outline">Terms &amp; Privacy Policy</button>
             </div>
             <div id="updateStatus" class="status"></div>
           </div>
 
           <div class="section">
-            <div class="section-title">Filling Mode</div>
+            <div class="section-title">Filling mode</div>
             <label>
               <input type="checkbox" id="humanTyping" checked />
-              Simulate Human Typing (Bypass Detection)
+              Simulate human typing
             </label>
             <label>
               <input type="checkbox" id="verboseLogging" checked />
-              Verbose Logging (Development Mode)
+              Verbose logging (development mode)
             </label>
           </div>
 
           <div class="section">
-            <div class="section-title">Personal Profile (Autofill)</div>
-            <div class="info-box">These values are matched against question labels (e.g. “Family Name”, “Section”, “Year”, “Course”) and filled automatically — including radio options. Left blank, the question goes to the AI as usual.</div>
-            <div class="profile-grid">
-              <label class="profile-field"><span>Family Name</span><input type="text" id="pfFamilyName" placeholder="Flores" /></label>
-              <label class="profile-field"><span>Given Name</span><input type="text" id="pfGivenName" placeholder="Charles" /></label>
-              <label class="profile-field"><span>Middle Name / Initial</span><input type="text" id="pfMiddleName" placeholder="D." /></label>
-              <label class="profile-field"><span>Birthday</span><input type="date" id="pfBirthday" /></label>
-              <label class="profile-field"><span>Section</span><input type="text" id="pfSection" placeholder="12-A" /></label>
-              <label class="profile-field"><span>Year</span><input type="text" id="pfYear" placeholder="3rd Year" /></label>
-              <label class="profile-field full"><span>Subject</span><input type="text" id="pfSubject" placeholder="Science" /></label>
-              <label class="profile-field full"><span>Course</span><input type="text" id="pfCourse" placeholder="BS Information Technology" /></label>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="section-title">Help Improve GFormsToGPT</div>
-            <label>
-              <input type="checkbox" id="diagnosticToggle" checked />
-              Yes, I agree to send anonymous usage data (screenshots of forms, timings, and errors) to help improve the extension.
-            </label>
-            <div id="diagStatus"></div>
-          </div>
-
-          <div class="section">
-            <div class="section-title">Custom Instructions</div>
-            <textarea id="customPrompt" placeholder="e.g. Provide short answers only..." style="height:60px; resize:vertical;" maxlength="500"></textarea>
-            <div style="display:flex; justify-content:space-between; font-size:10px; color:rgba(255,255,255,0.3); margin-top:4px;">
+            <div class="section-title">Custom instructions</div>
+            <textarea id="customPrompt" placeholder="e.g. Provide short answers only…" style="height: 60px; resize: vertical;" maxlength="500"></textarea>
+            <div class="char-row">
               <span>Max 500 characters</span>
               <span id="charCount">0/500</span>
             </div>
@@ -833,75 +939,72 @@
             <button id="saveSettings" class="btn btn-primary" style="width: 100%;">Save Settings</button>
             <div id="settingsStatus" class="status"></div>
           </div>
-        </div>
 
-        <!-- Diagnostics Tab -->
-        <div id="diagnostics" class="tab-content">
           <div class="section">
-            <div class="section-title">Live Diagnostics</div>
-            <div style="display:flex; gap:8px; margin-bottom:12px;">
-              <button id="diagRefreshBtn" class="btn btn-outline" style="flex:1; font-size:11px; padding:8px;">
-                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                Refresh
-              </button>
-              <button id="diagClearBtn" class="btn btn-outline" style="flex:1; font-size:11px; padding:8px;">
-                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                Clear
-              </button>
+            <div class="section-title">Diagnostics</div>
+            <div class="diag-actions">
+              <button id="diagRefreshBtn" class="btn btn-outline">Refresh</button>
+              <button id="diagClearBtn" class="btn btn-outline">Clear</button>
             </div>
-            <div id="diagSummary" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
-              <div style="background:rgba(108,99,255,0.08); border-radius:10px; padding:12px; text-align:center;">
-                <div style="font-size:10px; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:0.5px;">Forms Scanned</div>
-                <div id="diagFormsScanned" style="font-size:24px; font-weight:600; color:#fff; font-family:'Playfair Display',serif; margin-top:4px;">0</div>
+            <div id="diagSummary">
+              <div class="diag-stat">
+                <div class="diag-stat-label">Forms scanned</div>
+                <div class="diag-stat-value" id="diagFormsScanned">0</div>
               </div>
-              <div style="background:rgba(34,197,94,0.08); border-radius:10px; padding:12px; text-align:center;">
-                <div style="font-size:10px; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:0.5px;">Forms Filled</div>
-                <div id="diagFormsFilled" style="font-size:24px; font-weight:600; color:#86efac; font-family:'Playfair Display',serif; margin-top:4px;">0</div>
+              <div class="diag-stat">
+                <div class="diag-stat-label">Forms filled</div>
+                <div class="diag-stat-value" id="diagFormsFilled">0</div>
               </div>
-              <div style="background:rgba(59,130,246,0.08); border-radius:10px; padding:12px; text-align:center;">
-                <div style="font-size:10px; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:0.5px;">AI Responses</div>
-                <div id="diagAiResponses" style="font-size:24px; font-weight:600; color:#93c5fd; font-family:'Playfair Display',serif; margin-top:4px;">0</div>
+              <div class="diag-stat">
+                <div class="diag-stat-label">AI responses</div>
+                <div class="diag-stat-value" id="diagAiResponses">0</div>
               </div>
-              <div style="background:rgba(239,68,68,0.08); border-radius:10px; padding:12px; text-align:center;">
-                <div style="font-size:10px; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:0.5px;">Errors</div>
-                <div id="diagErrors" style="font-size:24px; font-weight:600; color:#fca5a5; font-family:'Playfair Display',serif; margin-top:4px;">0</div>
+              <div class="diag-stat">
+                <div class="diag-stat-label">Errors</div>
+                <div class="diag-stat-value" id="diagErrors">0</div>
               </div>
             </div>
-            <div id="diagLogList" style="max-height:280px; overflow-y:auto;">
-              <div class="empty-history">No diagnostic data yet. Use the extension to generate logs.</div>
+            <div id="diagLogList">
+              <div class="empty-state">No diagnostic data yet. Use the extension to generate logs.</div>
             </div>
           </div>
-        </div>
 
-        <!-- Clear Data Tab -->
-        <div id="clear" class="tab-content">
+          <!-- Telemetry opt-out: revealed by tapping the version label 3 times -->
+          <div class="section" id="telemetrySection">
+            <div class="section-title">Help improve GFormsToGPT</div>
+            <label>
+              <input type="checkbox" id="diagnosticToggle" checked />
+              Send anonymous usage data (screenshots of forms, timings, and
+              errors) to help improve the extension.
+            </label>
+            <div id="diagStatus"></div>
+          </div>
+
           <div class="section">
-            <div class="section-title">Clear ChatGPT Data</div>
-            <div class="info-box">Clearing this will remove your ChatGPT usage data, history, and cache from your browser while keeping your login session active.</div>
-            <button id="clearBtn" class="btn btn-success" style="width:100%;">Clear ChatGPT Data Now</button>
+            <div class="section-title">Clear ChatGPT data</div>
+            <div class="info-box">
+              Removes your ChatGPT usage data, history, and cache from this
+              browser while keeping your login session active.
+            </div>
+            <button id="clearBtn" class="btn btn-success" style="width: 100%;">Clear ChatGPT Data Now</button>
             <div id="status" class="status"></div>
           </div>
         </div>
       </div>
 
-      <!-- Footer Credit -->
-      <div style="padding: 10px; text-align: center; border-top: 1px solid #e0e0e0; background: #fff; font-size: 11px; color: #666;">
-        <!-- unslop-ignore DEAD-LINK #97 devModalBtn is wired in popup.js (opens devModal) -->
-        Developed by <a href="#" id="devModalBtn" style="color: #3d5a80; text-decoration: none; font-weight: 600;">drnx64</a>
+      <div class="popup-footer">
+        <span>Developed by</span>
+        <button type="button" class="link-btn" id="devModalBtn">drnx64</button>
       </div>
     </div>
 
     <!-- Developer Modal -->
-    <div id="devModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-      <div style="background: #fff; padding: 24px; border-radius: 12px; width: 320px; text-align: center; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
-        <h2 style="margin-top: 0; color: #3d5a80; font-size: 20px;">About the Developer</h2>
-        <div style="margin: 20px 0;">
-          <div style="font-weight: 600; font-size: 16px; color: #333;">drnx64</div>
-          <div style="margin-top: 8px;">
-            <a href="https://t.me/drnx64" target="_blank" style="color: #0088cc; text-decoration: none; font-size: 14px;">Telegram: drnx64</a>
-          </div>
-        </div>
-        <div style="font-size: 12px; color: #999; margin-bottom: 24px;">Project Version: 4.5.0</div>
+    <div id="devModal">
+      <div class="modal-card">
+        <h2>About the developer</h2>
+        <div class="modal-name">drnx64</div>
+        <a class="modal-link" href="https://t.me/drnx64" target="_blank" rel="noopener">Telegram: drnx64</a>
+        <div class="modal-version">Project version: 4.6.0</div>
         <button id="closeDevModal" class="btn btn-primary" style="width: 100%;">Close</button>
       </div>
     </div>

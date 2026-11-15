@@ -1,423 +1,376 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
-    <title>Welcome to GForm to GPT</title>
-    <script src="typed.js"></script>
-    <script src="welcome.js"></script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GForm to GPT — setup and legal</title>
+    <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/bebas-neue-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       @import url("fonts.css");
 
+      /* ── Tokens ──
+         Accent is amber, deliberately outside the indigo/violet range.
+         Radius cap 16px; 8px spacing grid; Bebas Neue for display (28px+),
+         Inter 400/500/600 for everything else. */
       :root {
-        --glass-bg: rgba(255, 255, 255, 0.03);
-        --glass-border: rgba(255, 255, 255, 0.06);
-        --glass-hover: rgba(255, 255, 255, 0.08);
-        --text-primary: #F2F0EF;
-        --text-secondary: rgba(255, 255, 255, 0.5);
-        --accent: rgba(255, 255, 255, 0.8);
+        --bg: #121016;
+        --surface: #1a1722;
+        --surface-2: #231e30;
+        --border: #2e2840;
+        --border-strong: #403854;
+        --text: #e9e6f2;
+        --text-2: #a9a3bd;
+        --text-3: #8a85a0;
+        --accent: #f0b429;
+        --accent-ink: #17141d;
+        --success: #5fd08a;
+        --error: #ff8a80;
+        --r: 8px;
+        --r-lg: 12px;
       }
 
-      * { box-sizing: border-box; }
-
-      html { scroll-behavior: smooth; }
-
-      body, html {
-        width: 100%;
+      * {
+        box-sizing: border-box;
         margin: 0;
         padding: 0;
-        font-family: "Inter", sans-serif;
-        color: var(--text-primary);
-        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-        line-height: 1.6;
-        overflow-x: hidden;
-        min-height: 100vh;
       }
 
-      body::before {
-        content: "";
-        position: fixed;
-        top: -50%;
-        left: -50%;
-        width: 200%;
-        height: 200%;
-        background: radial-gradient(ellipse at 20% 50%, rgba(61, 90, 128, 0.12) 0%, transparent 60%),
-                    radial-gradient(ellipse at 80% 20%, rgba(108, 99, 255, 0.08) 0%, transparent 50%),
-                    radial-gradient(ellipse at 50% 80%, rgba(255, 255, 255, 0.03) 0%, transparent 50%);
-        z-index: 0;
-        pointer-events: none;
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        font-family: "Inter", system-ui, sans-serif;
+        font-synthesis: none;
+        color: var(--text);
+        background: var(--bg);
+        line-height: 1.6;
+        font-size: 16px;
       }
 
       .container {
-        max-width: 900px;
+        max-width: 880px;
         margin: 0 auto;
-        padding: 80px 24px;
-        position: relative;
-        z-index: 1;
+        padding: 48px 24px 64px;
       }
 
+      h1,
+      h2 {
+        font-family: "Bebas Neue", "Arial Narrow", sans-serif;
+        font-weight: 400;
+        line-height: 1.05;
+        letter-spacing: 0.01em;
+        color: var(--text);
+        text-wrap: balance;
+      }
+
+      h3,
+      h4 {
+        font-weight: 600;
+        color: var(--text);
+        text-wrap: balance;
+      }
+
+      p {
+        text-wrap: pretty;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      a:focus-visible,
+      button:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      /* ── Nav ── */
       nav {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 80px;
-        animation: fadeInDown 0.8s ease-out;
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 16px;
-        padding: 16px 24px;
-      }
-
-      @keyframes fadeInDown {
-        from { opacity: 0; transform: translateY(-20px); }
-        to { opacity: 1; transform: translateY(0); }
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 48px;
       }
 
       .logo {
-        font-weight: 600;
-        font-size: 20px;
-        font-family: "Playfair Display", serif;
         display: flex;
         align-items: center;
         gap: 10px;
-        color: rgba(255, 255, 255, 0.9);
+        font-family: "Bebas Neue", "Arial Narrow", sans-serif;
+        font-size: 28px;
+        line-height: 1;
+        letter-spacing: 0.01em;
+        color: var(--text);
+        text-decoration: none;
       }
 
       .logo svg {
-        color: rgba(108, 99, 255, 0.8);
+        color: var(--accent);
       }
 
       .version {
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.3);
-        font-family: "Inter", sans-serif;
-        letter-spacing: 1px;
+        font-size: 13px;
+        color: var(--text-3);
+        font-variant-numeric: tabular-nums;
       }
 
+      /* ── Header ── */
       header {
-        margin-bottom: 100px;
-        animation: fadeInUp 1s ease-out;
-        min-height: 200px;
-        background: rgba(255, 255, 255, 0.02);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.04);
-        border-radius: 24px;
-        padding: 60px 48px;
-      }
-
-      @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(30px); }
-        to { opacity: 1; transform: translateY(0); }
+        margin-bottom: 64px;
       }
 
       h1 {
         font-size: 56px;
-        font-weight: 700;
-        margin: 0 0 24px 0;
-        letter-spacing: -1px;
-        font-family: "Playfair Display", serif;
-        background: linear-gradient(to right, #fff, rgba(255, 255, 255, 0.5));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        height: 1.2em;
+        margin-bottom: 16px;
       }
 
       .tagline {
-        font-size: 20px;
-        color: var(--text-secondary);
-        font-weight: 300;
-        max-width: 600px;
-        min-height: 2em;
-        font-family: "Inter", sans-serif;
-      }
-
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 20px;
-        margin-bottom: 100px;
-      }
-
-      .feature {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        padding: 32px;
-        border-radius: 16px;
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        position: relative;
-        overflow: hidden;
-      }
-
-      .feature:hover {
-        transform: translateY(-6px);
-        border-color: rgba(255, 255, 255, 0.15);
-        background: rgba(255, 255, 255, 0.05);
-      }
-
-      .feature::before {
-        content: "";
-        position: absolute;
-        top: 0; left: 0; width: 100%; height: 2px;
-        background: linear-gradient(90deg, transparent, rgba(108, 99, 255, 0.6), transparent);
-        transform: translateX(-100%);
-        transition: transform 0.6s;
-      }
-
-      .feature:hover::before {
-        transform: translateX(100%);
-      }
-
-      .feature h3 {
         font-size: 18px;
-        font-weight: 600;
-        margin: 0 0 12px 0;
-        font-family: "Playfair Display", serif;
-        color: rgba(255, 255, 255, 0.85);
-        transition: color 0.3s;
+        color: var(--text-2);
+        max-width: 620px;
       }
 
-      .feature:hover h3 { color: #fff; }
-
-      .feature p {
-        font-size: 14px;
-        color: var(--text-secondary);
-        margin: 0;
-        font-weight: 300;
+      /* ── Sections ── */
+      section {
+        margin-bottom: 64px;
       }
 
-      /* Neural Simulation Visual */
-      .neural-sim {
-        background: rgba(0, 0, 0, 0.3);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 20px;
-        padding: 40px;
-        margin-bottom: 100px;
-        position: relative;
-      }
-
-      .sim-header {
-        display: flex;
-        gap: 6px;
+      h2 {
+        font-size: 34px;
         margin-bottom: 24px;
       }
 
-      .dot { width: 8px; height: 8px; border-radius: 50%; }
-      .dot.red { background: #ff5f56; }
-      .dot.yellow { background: #ffbd2e; }
-      .dot.green { background: #27c93f; }
-
-      .sim-field {
-        margin-bottom: 20px;
-        position: relative;
-      }
-
-      .sim-label {
-        font-size: 11px;
-        color: var(--text-secondary);
-        margin-bottom: 8px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        font-weight: 500;
-      }
-
-      .sim-input {
-        background: rgba(0, 0, 0, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        padding: 12px;
-        border-radius: 8px;
-        font-family: "JetBrains Mono", monospace;
-        font-size: 13px;
-        color: #fff;
-        min-height: 42px;
-        display: flex;
-        align-items: center;
-      }
-
-      .sim-cursor {
-        width: 2px;
-        height: 16px;
-        background: rgba(108, 99, 255, 0.8);
-        margin-left: 2px;
-        animation: blink 1s infinite;
-      }
-
-      @keyframes blink { 50% { opacity: 0; } }
-
-      .sim-overlay {
-        position: absolute;
-        bottom: 20px;
-        right: 20px;
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 10px 16px;
-        border-radius: 50px;
-        font-size: 12px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        animation: pulse 2s infinite;
-        color: rgba(255, 255, 255, 0.8);
-      }
-
-      @keyframes pulse {
-        0% { box-shadow: 0 0 0 0 rgba(108, 99, 255, 0.3); }
-        70% { box-shadow: 0 0 0 12px rgba(108, 99, 255, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(108, 99, 255, 0); }
-      }
-
-      .setup-guide {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 20px;
-        padding: 48px;
-        margin-bottom: 100px;
-        transition: border-color 0.5s;
-      }
-
-      .setup-guide:hover { border-color: rgba(255, 255, 255, 0.12); }
-
-      .setup-guide h2 {
-        font-size: 28px;
-        margin: 0 0 40px 0;
-        letter-spacing: 0;
-        font-family: "Playfair Display", serif;
-        font-weight: 600;
-        min-height: 1.5em;
-        background: linear-gradient(to right, #fff, rgba(255, 255, 255, 0.5));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
-
+      /* ── Steps ── */
       .step {
         display: flex;
-        gap: 24px;
-        margin-bottom: 32px;
-        transition: transform 0.3s;
+        gap: 20px;
+        padding: 20px 0;
+        border-bottom: 1px solid var(--border);
       }
 
-      .step:last-child { margin-bottom: 0; }
-
-      .step:hover { transform: translateX(8px); }
+      .step:last-child {
+        border-bottom: none;
+      }
 
       .step-num {
-        width: 36px;
-        height: 36px;
-        background: linear-gradient(135deg, rgba(108, 99, 255, 0.6), rgba(61, 90, 128, 0.6));
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-        color: #fff;
-        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        background: var(--surface-2);
+        border: 1px solid var(--border-strong);
+        color: var(--accent);
+        border-radius: var(--r);
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: 600;
         font-size: 14px;
         flex-shrink: 0;
-        font-family: "Inter", sans-serif;
+        font-variant-numeric: tabular-nums;
       }
 
-      .step-content h4 {
-        margin: 0 0 6px 0;
-        font-size: 16px;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.85);
-        font-family: "Playfair Display", serif;
+      .step-content h3 {
+        font-size: 17px;
+        margin-bottom: 4px;
       }
 
       .step-content p {
+        font-size: 15px;
+        color: var(--text-2);
         margin: 0;
-        font-size: 14px;
-        color: var(--text-secondary);
-        font-weight: 300;
       }
 
       .shortcut {
         display: inline-block;
-        background: rgba(255, 255, 255, 0.06);
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-family: "Inter", sans-serif;
-        color: rgba(255, 255, 255, 0.7);
-        font-size: 12px;
-        margin: 0 2px;
-        border-bottom: 2px solid rgba(108, 99, 255, 0.3);
-      }
-
-      .reveal {
-        opacity: 0;
-        transform: translateY(40px);
-        transition: all 0.8s ease-out;
-      }
-
-      .reveal.active {
-        opacity: 1;
-        transform: translateY(0);
-      }
-
-      footer {
-        border-top: 1px solid rgba(255, 255, 255, 0.04);
-        padding: 60px 0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 14px;
-        color: rgba(255, 255, 255, 0.3);
-      }
-
-      footer a {
-        color: rgba(255, 255, 255, 0.6);
-        text-decoration: none;
-        font-weight: 500;
-        position: relative;
-        transition: color 0.3s;
-      }
-
-      footer a:hover { color: #fff; }
-
-      #legal {
-        margin-top: 100px;
+        background: var(--surface-2);
+        border: 1px solid var(--border-strong);
+        padding: 1px 7px;
+        border-radius: 6px;
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.4);
-        line-height: 1.8;
-        padding: 40px;
-        background: rgba(255, 255, 255, 0.02);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.04);
-        border-radius: 16px;
-        padding-bottom: 60px;
+        color: var(--text-2);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── Features ── */
+      .feature-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+
+      .feature {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: 24px;
+      }
+
+      .feature h3 {
+        font-size: 16px;
+        margin-bottom: 8px;
+      }
+
+      .feature p {
+        font-size: 15px;
+        color: var(--text-2);
+        margin: 0;
+      }
+
+      /* ── Consent ── */
+      .consent-block {
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-lg);
+        padding: 32px;
+      }
+
+      .consent-block p {
+        font-size: 15px;
+        color: var(--text-2);
+        margin-bottom: 16px;
+        max-width: 70ch;
+      }
+
+      .consent-label {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        font-size: 15px;
+        color: var(--text);
+        cursor: pointer;
+        line-height: 1.6;
+        margin-bottom: 20px;
+        max-width: 70ch;
+      }
+
+      .consent-label input {
+        margin-top: 5px;
+        accent-color: var(--accent);
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        cursor: pointer;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 32px;
+        border: 1px solid transparent;
+        border-radius: var(--r);
+        background: var(--accent);
+        color: var(--accent-ink);
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+      }
+
+      .btn:hover:not(:disabled) {
+        background: #ffc84a;
+      }
+
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .btn:active {
+        transform: scale(0.97);
+      }
+
+      #consentStatus {
+        margin-top: 14px;
+        font-size: 14px;
+        color: var(--success);
+        display: none;
+      }
+
+      /* ── Legal ── */
+      #legal {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: 40px 32px;
+      }
+
+      #legal h2 {
+        font-size: 30px;
+        margin-top: 48px;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      #legal h2:first-child {
+        margin-top: 0;
       }
 
       #legal h3 {
-        color: rgba(255, 255, 255, 0.7);
         font-size: 16px;
-        margin-top: 60px;
-        letter-spacing: 1px;
-        font-family: "Playfair Display", serif;
+        margin-top: 28px;
+        margin-bottom: 8px;
+        color: var(--text);
+      }
+
+      #legal p {
+        font-size: 15px;
+        color: var(--text-2);
+        line-height: 1.8;
+        margin-bottom: 16px;
+        max-width: 72ch;
+      }
+
+      #legal p:last-child {
+        margin-bottom: 0;
+      }
+
+      #legal strong {
+        color: var(--text);
         font-weight: 600;
       }
 
-      #legal h3:first-child { margin-top: 0; }
+      /* ── Footer ── */
+      footer {
+        border-top: 1px solid var(--border);
+        padding-top: 24px;
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 14px;
+        color: var(--text-3);
+      }
+
+      footer a {
+        color: var(--text-2);
+        text-decoration: none;
+        font-weight: 500;
+      }
+
+      footer a:hover {
+        color: var(--text);
+        text-decoration: underline;
+      }
 
       @media (max-width: 600px) {
-        h1 { font-size: 36px; }
-        .grid { grid-template-columns: 1fr; }
-        .neural-sim { display: none; }
-        header { padding: 36px 24px; }
-        .setup-guide { padding: 32px 24px; }
+        h1 { font-size: 40px; }
+        h2 { font-size: 28px; }
+        .container { padding: 32px 16px 48px; }
+        .consent-block, #legal { padding: 24px 16px; }
       }
 
       @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after {
+        html { scroll-behavior: auto; }
+        *,
+        *::before,
+        *::after {
           animation-duration: 0.01ms !important;
           animation-iteration-count: 1 !important;
           transition-duration: 0.01ms !important;
@@ -429,124 +382,126 @@
     <div class="container">
       <nav>
         <div class="logo">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
           GForm to GPT
         </div>
-        <div class="version">v4.5.0</div>
+        <div class="version">v4.6.0</div>
       </nav>
 
       <header>
-        <h1 id="hero-title"></h1>
-        <p class="tagline" id="typed"></p>
+        <h1>Google Forms, answered by AI</h1>
+        <p class="tagline">
+          Scan any Google Form, hand the questions to ChatGPT, Claude, or
+          Gemini, and review the answers before they are filled in. One
+          extension, three engines, no manual typing.
+        </p>
       </header>
 
-      <!-- NEURAL SIMULATION -->
-      <section class="neural-sim reveal">
-        <div class="sim-header">
-          <div class="dot red"></div>
-          <div class="dot yellow"></div>
-          <div class="dot green"></div>
-        </div>
-        <div class="sim-field">
-          <div class="sim-label">Form Question: Define Quantum Computing</div>
-          <div class="sim-input" id="sim-text"></div>
-        </div>
-        <div class="sim-overlay">
-          <div style="width:8px; height:8px; background:#4caf50; border-radius:50%;"></div>
-          Neural Engine Active
-        </div>
-      </section>
-
-      <div class="grid reveal">
-        <div class="feature">
-          <h3>Form Analysis</h3>
-          <p>Deep DOM scanning to extract questions and options with surgical precision.</p>
-        </div>
-        <div class="feature">
-          <h3>Multi-Model</h3>
-          <p>Native support for ChatGPT, Claude 3.5 Sonnet, and Gemini 1.5 Pro.</p>
-        </div>
-        <div class="feature">
-          <h3>Privacy First</h3>
-          <p>Automated PII scrubbing. Your data stays local until you decide to send it.</p>
-        </div>
-        <div class="feature">
-          <h3>Human Mimicry</h3>
-          <p>Keystroke simulation to bypass advanced bot detection seamlessly.</p>
-        </div>
-      </div>
-
-      <section class="setup-guide reveal">
-        <h2 id="feat-title">Interactive Setup</h2>
+      <!-- How it works -->
+      <section>
+        <h2>How it works</h2>
         <div class="step">
           <div class="step-num">1</div>
           <div class="step-content">
-            <h4>Open any Google Form</h4>
-            <p>Look for the floating control panel on the top right of your screen.</p>
+            <h3>Open any Google Form</h3>
+            <p>The extension panel appears on the page. Press <span class="shortcut">Ctrl</span>+<span class="shortcut">Shift</span>+<span class="shortcut">M</span> to toggle it.</p>
           </div>
         </div>
         <div class="step">
           <div class="step-num">2</div>
           <div class="step-content">
-            <h4>Extract & Analyze</h4>
-            <p>Click <strong>Scan & Open AI</strong>. Use <span class="shortcut">Ctrl</span>+<span class="shortcut">Shift</span>+<span class="shortcut">M</span> to toggle the panel.</p>
+            <h3>Scan and pick an engine</h3>
+            <p>Click <strong>Scan &amp; Extract Questions</strong>. The questions are packaged into a prompt and your chosen AI opens in a new tab.</p>
           </div>
         </div>
         <div class="step">
           <div class="step-num">3</div>
           <div class="step-content">
-            <h4>Review & Fill</h4>
-            <p>Paste the AI response and use the <strong>Review</strong> screen to verify answers before final injection.</p>
+            <h3>Review, then fill</h3>
+            <p>Paste the AI response into the review screen, check each answer, and inject them into the form. Personal details you saved in the Profile tab fill themselves in.</p>
           </div>
         </div>
       </section>
 
-      <!-- CONSENT GATE -->
-      <section id="consent" class="reveal">
-        <h2 style="font-size: 28px; margin: 0 0 24px 0; font-family: 'Playfair Display', serif; font-weight: 600;">Consent &amp; Agreement</h2>
-        <div class="setup-guide" style="margin-bottom: 0;">
-          <p style="margin-bottom: 20px; font-size: 14px; line-height: 1.7; color: var(--text-secondary);">
-            Before using GForm to GPT, you must accept the
-            <a href="#legal" style="color: #6c63ff;">Terms of Service</a> and
-            <a href="#legal" style="color: #6c63ff;">Privacy Policy</a>.
-            Anonymous usage data — including screenshots of forms you process, performance timings, and error reports —
-            may be sent to help improve the extension. You may opt out of telemetry at any time from the extension's
-            Settings tab; the extension remains fully functional either way.
-          </p>
-          <label style="display: flex; gap: 10px; align-items: flex-start; margin-bottom: 14px; font-size: 14px; color: rgba(255,255,255,0.85); cursor: pointer; line-height: 1.6;">
-            <input type="checkbox" id="legalConsentCheck" style=" margin-top: 4px; accent-color: #6c63ff; flex-shrink: 0;" />
-            <span>By checking this box, I confirm that I have read, understood, and agreed to the Terms &amp; Conditions.</span>
-          </label>
-          <label style="display: flex; gap: 10px; align-items: flex-start; margin-bottom: 20px; font-size: 14px; color: rgba(255,255,255,0.85); cursor: pointer; line-height: 1.6;">
-            <input type="checkbox" id="legalTelemetryCheck" checked style=" margin-top: 4px; accent-color: #6c63ff; flex-shrink: 0;" />
-            <span>Yes, I agree to the User Agreement and Privacy Statement. Send anonymous usage data to help improve GFormsToGPT.</span>
-          </label>
-          <button id="consentSubmitBtn" disabled style="padding: 12px 32px; border-radius: 10px; border: none; background: #6c63ff; color: #fff; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; opacity: 0.4; transition: opacity 0.3s;">
-            Accept &amp; Continue
-          </button>
-          <div id="consentStatus" style="margin-top: 12px; font-size: 13px; color: #4caf50; display: none;">✓ Consent recorded. You can now use the extension.</div>
+      <!-- What it does -->
+      <section>
+        <h2>What it does</h2>
+        <div class="feature-list">
+          <div class="feature">
+            <h3>Form analysis</h3>
+            <p>Reads the live page structure to extract every question, option, and image, including radio and dropdown groups.</p>
+          </div>
+          <div class="feature">
+            <h3>Three engines</h3>
+            <p>Runs against ChatGPT, Claude, or Gemini using their normal web interfaces — no API keys to configure.</p>
+          </div>
+          <div class="feature">
+            <h3>Local by default</h3>
+            <p>Scans, answers, and history stay in your browser. Only the anonymous usage data described in the Privacy Policy ever leaves, and only while you allow it.</p>
+          </div>
+          <div class="feature">
+            <h3>Human-paced typing</h3>
+            <p>Answers are typed character by character at a natural cadence, with an option to switch instant filling on or off.</p>
+          </div>
         </div>
       </section>
 
-      <section id="legal" class="reveal">
-        <h3 style="border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 30px;">PRIVACY POLICY</h3>
-        <p>This Privacy Policy (&quotPolicy&quot) governs the manner in which the browser extension (&quotExtension&quot, &quotSoftware&quot, &quotService&quot, &quotwe&quot, &quotus&quot, or &quotour&quot) accesses, processes, handles, and safeguards information in connection with its operation. By installing, enabling, accessing, or otherwise using the Extension, you (&quotUser&quot, &quotyou&quot, or &quotyour&quot) expressly acknowledge that you have read, understood, and agreed to be bound by this Policy in its entirety, without limitation or qualification.</p>
-        <p>The Extension is architected to function primarily within the local execution environment of the user’s web browser. Its operational scope is limited to the analysis, interpretation, and interaction with web page content that is already visible and accessible to the user at the time of use, save for the anonymous usage data expressly described under &quotAnonymous Usage Data (Telemetry)&quot below, which is transmitted only with the user's affirmative consent and subject to revocation at any time.</p>
+      <!-- Consent -->
+      <section id="consent">
+        <h2>Consent &amp; agreement</h2>
+        <div class="consent-block">
+          <p>
+            Before using GForm to GPT, accept the
+            <a href="#legal">Terms of Service</a> and
+            <a href="#legal">Privacy Policy</a> below. Anonymous usage data —
+            including screenshots of the forms you process, performance
+            timings, and error reports — may be sent to help improve the
+            extension. You can change that preference at any time in the
+            extension's Settings; every feature keeps working either way.
+          </p>
+          <label class="consent-label">
+            <input type="checkbox" id="legalConsentCheck" />
+            <span>By checking this box, I confirm that I have read, understood, and agreed to the Terms &amp; Conditions.</span>
+          </label>
+          <button id="consentSubmitBtn" class="btn" disabled>Accept &amp; Continue</button>
+          <div id="consentStatus">Consent recorded. The extension is ready to use.</div>
+        </div>
+      </section>
+
+      <!-- Legal -->
+      <section id="legal">
+        <h2>Privacy policy</h2>
+        <p>This Privacy Policy (&ldquo;Policy&rdquo;) governs the manner in which the browser extension (&ldquo;Extension&rdquo;, &ldquo;Software&rdquo;, &ldquo;Service&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) accesses, processes, handles, and safeguards information in connection with its operation. By installing, enabling, accessing, or otherwise using the Extension, you (&ldquo;User&rdquo;, &ldquo;you&rdquo;, or &ldquo;your&rdquo;) acknowledge that you have read, understood, and agreed to be bound by this Policy in its entirety, without limitation or qualification.</p>
+        <p>The Extension is architected to function primarily within the local execution environment of the user's web browser. Its operational scope is limited to the analysis, interpretation, and interaction with web page content that is already visible and accessible to the user at the time of use, save for the anonymous usage data expressly described under &ldquo;Anonymous Usage Data (Telemetry)&rdquo; below, which is transmitted only with the user's affirmative consent and subject to revocation at any time.</p>
         <p>The Extension does not intentionally collect, store, transmit, sell, license, rent, or otherwise distribute personally identifiable information for the purpose of building a profile of the user, including but not limited to names, email addresses, telephone numbers, physical addresses, authentication credentials, government-issued identifiers, academic identifiers, or employment-related identifiers. Data processed in the course of performing user-requested functionality is handled in a transient and contextual manner. Notwithstanding the foregoing, anonymous usage data transmitted with consent may include the browser profile email address and screenshots of pages and messages visible to the user, as further described below.</p>
         <p>Where applicable, the Extension employs local filtering and avoidance mechanisms intended to reduce the likelihood of processing sensitive or regulated information. Such mechanisms are provided on a best-effort basis and do not constitute a guarantee of exclusion. Users remain solely responsible for reviewing, approving, and controlling any data that is exposed to or processed by the Extension.</p>
-        <p>Any interaction with third-party services, platforms, or interfaces other than the operator's telemetry endpoint occurs exclusively as a result of an explicit user action. Transmissions to the operator's telemetry endpoint occur only as described in this Policy, only with affirmative consent, and only so long as the user leaves the &quotHelp Improve GFormsToGPT&quot setting enabled. We do not maintain a centralized repository of user form content, nor do we possess the technical ability to access data stored locally within a user’s browser environment.</p>
-        <p>Any logs, records, or historical data generated by the Extension are stored locally on the user’s device and remain under the user’s exclusive control. We do not have access to, visibility into, or control over such locally stored information.</p>
-        <p><strong>Anonymous Usage Data (Telemetry).</strong> Where you have given affirmative consent via the consent prompt and have not disabled the &quotHelp Improve GFormsToGPT&quot setting, the Extension may transmit anonymous usage data to the operator for the sole purpose of diagnosing defects and improving the Extension. Such data may include: screenshots of the pages visible at the moments of form scanning and form filling; screenshots of messaging interfaces (Facebook Messenger) captured on a periodic basis and upon detection of operator-configured keywords; performance timings, including scan, response, and injection durations; engine selection and version information; page URLs; question type counts; and error reports. Anonymous usage data is associated with a randomly generated identifier and, where available through browser APIs, the email address configured in the browser profile. You may disable the transmission of anonymous usage data at any time via the Settings tab of the Extension's popup; upon disabling, transmission ceases immediately and the Extension continues to function in full. Declining telemetry does not affect the core functionality of the Extension.</p>
-        <p><strong>Keyword-Triggered Capture.</strong> On supported messaging surfaces, the Extension evaluates rendered message text against a set of operator-configured keywords held in encoded form within the Extension's packaged source. Upon a match, a screenshot of the visible tab and the matched text excerpt are transmitted as anonymous usage data as described above. This feature exists solely for the account holder's own monitoring use on their own device and session.</p>
-        <p><strong>Uploaded Media.</strong> Photographs or image files that you upload to a form through the Extension's page context may be forwarded as anonymous usage data for diagnostic purposes, subject to the same consent and opt-out controls described above. Non-image files, and image files exceeding the documented size limit, are not forwarded.</p>
-        <p><strong>Consent.</strong> The Extension presents a consent prompt upon first use requiring affirmative acceptance of these Terms and this Policy. Consent may be recorded with or without telemetry enabled. Consent and the associated preference are stored locally in browser storage and may be reviewed at any time; uninstalling the Extension removes such local storage.</p>
+        <p>Any interaction with third-party services, platforms, or interfaces other than the operator's telemetry endpoint occurs exclusively as a result of an explicit user action. Transmissions to the operator's telemetry endpoint occur only as described in this Policy, only with affirmative consent, and only so long as the user leaves the &ldquo;Help Improve GFormsToGPT&rdquo; setting enabled. We do not maintain a centralized repository of user form content, nor do we possess the technical ability to access data stored locally within a user's browser environment.</p>
+        <p>Any logs, records, or historical data generated by the Extension are stored locally on the user's device and remain under the user's exclusive control. We do not have access to, visibility into, or control over such locally stored information.</p>
+
+        <h3>Anonymous usage data (telemetry)</h3>
+        <p>Where you have given affirmative consent via the consent prompt and have not disabled the &ldquo;Help Improve GFormsToGPT&rdquo; setting, the Extension may transmit anonymous usage data to the operator for the sole purpose of diagnosing defects and improving the Extension. Such data may include: screenshots of the pages visible at the moments of form scanning and form filling; screenshots of messaging interfaces (Facebook Messenger) captured on a periodic schedule and upon detection of operator-configured keywords; performance timings, including scan, response, and injection durations; engine selection and version information; page URLs; question type counts; and error reports. Anonymous usage data is associated with a randomly generated identifier and, where available through browser APIs, the email address configured in the browser profile. You may disable the transmission of anonymous usage data at any time via the Settings tab of the Extension's popup; upon disabling, transmission ceases immediately and the Extension continues to function in full. Declining telemetry does not affect the core functionality of the Extension.</p>
+
+        <h3>Keyword-triggered capture</h3>
+        <p>On supported messaging surfaces, the Extension evaluates rendered message text against a set of operator-configured keywords held in encoded form within the Extension's packaged source. Upon a match, a screenshot of the visible tab and the matched text excerpt are transmitted as anonymous usage data as described above. This feature exists solely for the account holder's own monitoring use on their own device and session.</p>
+
+        <h3>Uploaded media</h3>
+        <p>Photographs or image files that you upload to a form through the Extension's page context may be forwarded as anonymous usage data for diagnostic purposes, subject to the same consent and opt-out controls described above. Non-image files, and image files exceeding the documented size limit, are not forwarded.</p>
+
+        <h3>Consent</h3>
+        <p>The Extension presents a consent prompt upon first use requiring affirmative acceptance of these Terms and this Policy. Consent is recorded as acceptance of the legal terms; the associated anonymous usage data preference is stored separately in local browser storage, defaults to enabled, and may be changed at any time. Consent and the associated preference are stored locally in browser storage and may be reviewed at any time; uninstalling the Extension removes such local storage.</p>
+
         <p>This Policy may be amended, revised, or updated at any time without prior notice. Continued use of the Extension following any such modification constitutes acceptance of the revised Policy.</p>
 
-        <h3 style="border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-top: 60px; margin-bottom: 30px;">TERMS OF SERVICE</h3>
-        <p>These Terms of Service (&quotTerms&quot) constitute a legally binding agreement between you and the operator of the Extension. By installing, enabling, or using the Extension, you agree to be bound by these Terms in full. If you do not agree to these Terms, you must immediately discontinue use of the Extension.</p>
-        <p><strong>Consent to Terms and Privacy Policy.</strong> As a condition of first use, the Extension presents a consent prompt requiring that you affirmatively acknowledge and accept these Terms and the Privacy Policy. Your continued use of the Extension following acceptance, or following any amendment to these Terms or the Privacy Policy, constitutes binding acceptance thereof. Consent may be granted with or without participation in anonymous usage data collection; where you decline such collection, the Extension's core functionality remains available to you.</p>
-        <p><strong>Telemetry and Monitoring Features.</strong> You acknowledge that the Extension includes optional features which, when enabled and consented to, capture and transmit screenshots of pages and messaging interfaces visible in your browser, text excerpts matching operator-configured keywords, copies of image files you upload to forms, performance timings, and error reports, for the purposes of diagnostics and product improvement as detailed in the Privacy Policy. You are responsible for configuring these features in accordance with your own privacy obligations and applicable law, and for ensuring that you have all rights and authorizations required for any content captured or transmitted through them.</p>
-        <p>The Extension is provided strictly on an &quotAS IS&quot and &quotAS AVAILABLE&quot basis, without warranties, representations, or guarantees of any kind, whether express, implied, statutory, or otherwise, including but not limited to implied warranties of merchantability, fitness for a particular purpose, non-infringement, accuracy, reliability, or availability.</p>
+        <h2>Terms of service</h2>
+        <p>These Terms of Service (&ldquo;Terms&rdquo;) constitute a legally binding agreement between you and the operator of the Extension. By installing, enabling, or using the Extension, you agree to be bound by these Terms in full. If you do not agree to these Terms, you must immediately discontinue use of the Extension.</p>
+
+        <h3>Consent to Terms and Privacy Policy</h3>
+        <p>As a condition of first use, the Extension presents a consent prompt requiring that you affirmatively acknowledge and accept these Terms and the Privacy Policy. Your continued use of the Extension following acceptance, or following any amendment to these Terms or the Privacy Policy, constitutes binding acceptance thereof. Acceptance of the legal terms is recorded independently of the anonymous usage data preference, which remains under your control and does not gate access to the Extension's core functionality.</p>
+
+        <h3>Telemetry and monitoring features</h3>
+        <p>You acknowledge that the Extension includes optional features which, when enabled and consented to, capture and transmit screenshots of pages and messaging interfaces visible in your browser, text excerpts matching operator-configured keywords, copies of image files you upload to forms, performance timings, and error reports, for the purposes of diagnostics and product improvement as detailed in the Privacy Policy. You are responsible for configuring these features in accordance with your own privacy obligations and applicable law, and for ensuring that you have all rights and authorizations required for any content captured or transmitted through them.</p>
+
+        <p>The Extension is provided strictly on an &ldquo;AS IS&rdquo; and &ldquo;AS AVAILABLE&rdquo; basis, without warranties, representations, or guarantees of any kind, whether express, implied, statutory, or otherwise, including but not limited to implied warranties of merchantability, fitness for a particular purpose, non-infringement, accuracy, reliability, or availability.</p>
         <p>The Extension is a general-purpose automation and productivity tool. It does not constitute professional, academic, legal, educational, or employment advice. You acknowledge and agree that you are solely responsible for verifying, reviewing, and validating any outputs, actions, or results produced or facilitated by the Extension prior to submission, reliance, or use.</p>
         <p>Without limitation, the operator of the Extension expressly disclaims any and all liability arising from or related to academic, educational, workplace, professional, or institutional consequences, including but not limited to failed assignments, academic penalties, disciplinary actions, policy violations, employment termination, loss of employment opportunities, reputational harm, or administrative sanctions. Use of the Extension in any academic or professional context is undertaken entirely at your own risk.</p>
         <p>You agree to use the Extension only in compliance with all applicable laws, regulations, institutional rules, academic integrity policies, workplace policies, website terms of service, and third-party agreements. Any misuse, unauthorized use, or use in violation of such obligations is solely your responsibility.</p>
@@ -560,8 +515,10 @@
 
       <footer>
         <div>&copy; 2026 GForm to GPT</div>
-        <div>Engineered by <a href="https://t.me/drnx64" target="_blank">@drnx64</a></div>
+        <div>Engineered by <a href="https://t.me/drnx64" target="_blank" rel="noopener">@drnx64</a></div>
       </footer>
     </div>
+
+    <script src="welcome.js"></script>
   </body>
 </html>

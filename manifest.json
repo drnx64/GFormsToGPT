@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
   "name": "GForm to GPT",
-  "version": "4.5.0",
+  "version": "4.6.0",
   "description": "Scan Google Forms, filter personal questions, and auto-fill with ChatGPT responses. Anonymous usage data may be sent to help improve the extension.",
   "author": "@drnx64",
   "web_accessible_resources": [
     {
-      "resources": ["welcome.html", "bg.jpg", "welcome.js", "typed.js", "farewell.html", "fonts.css", "fonts/*"],
+      "resources": ["welcome.html", "welcome.js", "farewell.html", "fonts.css", "fonts/*"],
       "matches": ["<all_urls>"]
     }
   ],

