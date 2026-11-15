@@ -220,76 +220,25 @@
         margin: 0;
       }
 
-      /* ── Consent ── */
-      .consent-block {
+      /* ── Next step ── */
+      .next-step {
+        font-size: 15px;
+        color: var(--text-3);
+        margin-top: 16px;
+      }
+
+      .note-block {
         background: var(--surface);
         border: 1px solid var(--border-strong);
         border-radius: var(--r-lg);
         padding: 32px;
       }
 
-      .consent-block p {
+      .note-block p {
         font-size: 15px;
         color: var(--text-2);
-        margin-bottom: 16px;
+        margin: 0;
         max-width: 70ch;
-      }
-
-      .consent-label {
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-        font-size: 15px;
-        color: var(--text);
-        cursor: pointer;
-        line-height: 1.6;
-        margin-bottom: 20px;
-        max-width: 70ch;
-      }
-
-      .consent-label input {
-        margin-top: 5px;
-        accent-color: var(--accent);
-        width: 18px;
-        height: 18px;
-        flex-shrink: 0;
-        cursor: pointer;
-      }
-
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 12px 32px;
-        border: 1px solid transparent;
-        border-radius: var(--r);
-        background: var(--accent);
-        color: var(--accent-ink);
-        font-family: inherit;
-        font-size: 15px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background-color 0.15s ease;
-      }
-
-      .btn:hover:not(:disabled) {
-        background: #ffc84a;
-      }
-
-      .btn:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-      }
-
-      .btn:active {
-        transform: scale(0.97);
-      }
-
-      #consentStatus {
-        margin-top: 14px;
-        font-size: 14px;
-        color: var(--success);
-        display: none;
       }
 
       /* ── Legal ── */
@@ -363,7 +312,7 @@
         h1 { font-size: 40px; }
         h2 { font-size: 28px; }
         .container { padding: 32px 16px 48px; }
-        .consent-block, #legal { padding: 24px 16px; }
+        .note-block, #legal { padding: 24px 16px; }
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -391,10 +340,11 @@
       <header>
         <h1>Google Forms, answered by AI</h1>
         <p class="tagline">
-          Scan any Google Form, hand the questions to ChatGPT, Claude, or
-          Gemini, and review the answers before they are filled in. One
-          extension, three engines, no manual typing.
+          Scan any Google Form, get answers from ChatGPT, Claude, or Gemini,
+          and review them before they're filled in. One extension, three
+          engines, no typing.
         </p>
+        <p class="next-step">Open the extension icon and accept the terms to begin.</p>
       </header>
 
       <!-- How it works -->
@@ -411,14 +361,14 @@
           <div class="step-num">2</div>
           <div class="step-content">
             <h3>Scan and pick an engine</h3>
-            <p>Click <strong>Scan &amp; Extract Questions</strong>. The questions are packaged into a prompt and your chosen AI opens in a new tab.</p>
+            <p>Click <strong>Scan &amp; Extract Questions</strong>. Your AI opens in a new tab with the questions ready.</p>
           </div>
         </div>
         <div class="step">
           <div class="step-num">3</div>
           <div class="step-content">
             <h3>Review, then fill</h3>
-            <p>Paste the AI response into the review screen, check each answer, and inject them into the form. Personal details you saved in the Profile tab fill themselves in.</p>
+            <p>Paste the AI response, check each answer, then fill the form. Saved profile details fill themselves in.</p>
           </div>
         </div>
       </section>
@@ -433,38 +383,28 @@
           </div>
           <div class="feature">
             <h3>Three engines</h3>
-            <p>Runs against ChatGPT, Claude, or Gemini using their normal web interfaces — no API keys to configure.</p>
+            <p>Works with ChatGPT, Claude, or Gemini through their normal web pages. No API keys needed.</p>
           </div>
           <div class="feature">
             <h3>Local by default</h3>
-            <p>Scans, answers, and history stay in your browser. Only the anonymous usage data described in the Privacy Policy ever leaves, and only while you allow it.</p>
+            <p>Scans, answers, and history stay in your browser. Anonymous usage data leaves only if you allow it.</p>
           </div>
           <div class="feature">
             <h3>Human-paced typing</h3>
-            <p>Answers are typed character by character at a natural cadence, with an option to switch instant filling on or off.</p>
+            <p>Answers are typed at a natural pace. You can switch to instant filling anytime.</p>
           </div>
         </div>
       </section>
 
-      <!-- Consent -->
-      <section id="consent">
-        <h2>Consent &amp; agreement</h2>
-        <div class="consent-block">
+      <!-- Get started: terms acceptance happens only in the popup gate -->
+      <section id="get-started">
+        <h2>Get started</h2>
+        <div class="note-block">
           <p>
-            Before using GForm to GPT, accept the
-            <a href="#legal">Terms of Service</a> and
-            <a href="#legal">Privacy Policy</a> below. Anonymous usage data —
-            including screenshots of the forms you process, performance
-            timings, and error reports — may be sent to help improve the
-            extension. You can change that preference at any time in the
-            extension's Settings; every feature keeps working either way.
+            Open the extension popup and accept the terms to unlock every
+            feature. The panel opens on any Google Form, or press
+            <span class="shortcut">Ctrl</span>+<span class="shortcut">Shift</span>+<span class="shortcut">M</span>.
           </p>
-          <label class="consent-label">
-            <input type="checkbox" id="legalConsentCheck" />
-            <span>By checking this box, I confirm that I have read, understood, and agreed to the Terms &amp; Conditions.</span>
-          </label>
-          <button id="consentSubmitBtn" class="btn" disabled>Accept &amp; Continue</button>
-          <div id="consentStatus">Consent recorded. The extension is ready to use.</div>
         </div>
       </section>
 
