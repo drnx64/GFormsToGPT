@@ -867,15 +867,13 @@
           <div class="section">
             <div class="section-title">Personal profile</div>
             <div class="info-box">
-              These values are matched against question labels (for example
-              &ldquo;Family Name&rdquo;, &ldquo;Section&rdquo;, &ldquo;Year&rdquo;)
-              and filled automatically, including radio options. Left blank,
-              the question goes to the AI as usual.
+              Matched against question labels and filled automatically.
+              Leave blank to use the AI answer.
             </div>
             <div class="profile-grid">
-              <label class="profile-field"><span>Family name</span><input type="text" id="pfFamilyName" placeholder="Flores" /></label>
-              <label class="profile-field"><span>Given name</span><input type="text" id="pfGivenName" placeholder="Charles" /></label>
-              <label class="profile-field"><span>Middle name / initial</span><input type="text" id="pfMiddleName" placeholder="D." /></label>
+              <label class="profile-field"><span>Family name</span><input type="text" id="pfFamilyName" placeholder="Doe" /></label>
+              <label class="profile-field"><span>Given name</span><input type="text" id="pfGivenName" placeholder="John" /></label>
+              <label class="profile-field"><span>Middle name / initial</span><input type="text" id="pfMiddleName" placeholder="Mark" /></label>
               <label class="profile-field"><span>Birthday</span><input type="date" id="pfBirthday" /></label>
               <label class="profile-field"><span>Section</span><input type="text" id="pfSection" placeholder="12-A" /></label>
               <label class="profile-field"><span>Year</span><input type="text" id="pfYear" placeholder="3rd Year" /></label>
@@ -983,8 +981,8 @@
           <div class="section">
             <div class="section-title">Clear ChatGPT data</div>
             <div class="info-box">
-              Removes your ChatGPT usage data, history, and cache from this
-              browser while keeping your login session active.
+              Removes ChatGPT data and history from this browser.
+              Your login stays active.
             </div>
             <button id="clearBtn" class="btn btn-success" style="width: 100%;">Clear ChatGPT Data Now</button>
             <div id="status" class="status"></div>
