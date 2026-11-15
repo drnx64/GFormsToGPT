@@ -91,4 +91,43 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     setTimeout(type, 1000);
   }
+
+  // ── Consent gate ──
+  const consentCheck = document.getElementById("legalConsentCheck");
+  const consentTelemetry = document.getElementById("legalTelemetryCheck");
+  const consentBtn = document.getElementById("consentSubmitBtn");
+  const consentStatus = document.getElementById("consentStatus");
+
+  if (consentCheck && consentBtn) {
+    const sync = () => {
+      consentBtn.disabled = !consentCheck.checked;
+      consentBtn.style.opacity = consentCheck.checked ? "1" : "0.4";
+    };
+    consentCheck.addEventListener("change", sync);
+
+    // Show a recorded state if consent was already given (e.g. via the popup).
+    if (typeof chrome !== "undefined" && chrome.storage) {
+      chrome.storage.local.get(["consentAccepted"], (data) => {
+        if (data.consentAccepted === true) {
+          consentCheck.checked = true;
+          sync();
+          if (consentStatus) consentStatus.style.display = "block";
+        }
+      });
+    }
+
+    consentBtn.addEventListener("click", () => {
+      if (!consentCheck.checked) return;
+      const telemetry = consentTelemetry ? consentTelemetry.checked : true;
+      if (typeof chrome !== "undefined" && chrome.storage) {
+        chrome.storage.local.set({ consentAccepted: true, consentAt: Date.now(), diagnosticEnabled: telemetry });
+        if (chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({ action: "consentGiven", payload: { accepted: true, telemetry } }).catch(() => {});
+        }
+      }
+      if (consentStatus) consentStatus.style.display = "block";
+      consentBtn.disabled = true;
+      consentBtn.textContent = "Accepted ✓";
+    });
+  }
 });

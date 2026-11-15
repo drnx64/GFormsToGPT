@@ -1,4 +1,4 @@
-// Popup script for GFormToGPT v4.4.0 - Neural Interface
+// Popup script for GFormToGPT v4.5.0 - Neural Interface
 
 // ── Escaping (form titles / answers / diag fields are untrusted page text) ──
 function escapeHtml(value) {
@@ -11,6 +11,75 @@ function escapeHtml(value) {
       default: return "&#39;";
     }
   });
+}
+
+// ── Consent gate: block all use until Terms/Privacy are accepted ──
+const consentGate = document.getElementById("consentGate");
+const consentCheck = document.getElementById("consentCheck");
+const consentTelemetry = document.getElementById("consentTelemetry");
+const consentAcceptBtn = document.getElementById("consentAcceptBtn");
+
+async function initConsentGate() {
+  if (!consentGate || !consentCheck || !consentAcceptBtn) return;
+  let state = { consentAccepted: false, diagnosticEnabled: true };
+  try {
+    state = (await chrome.runtime.sendMessage({ action: "getConsent" })) || state;
+  } catch (e) { /* worker unavailable — keep gated */ }
+
+  if (state.consentAccepted) {
+    consentGate.style.display = "none";
+    return;
+  }
+
+  consentGate.style.display = "flex"; // fail-closed: gate stays up on any error
+  if (consentTelemetry) consentTelemetry.checked = state.diagnosticEnabled !== false;
+  consentCheck.checked = false;
+  consentAcceptBtn.disabled = true;
+
+  const sync = () => { consentAcceptBtn.disabled = !consentCheck.checked; };
+  consentCheck.addEventListener("change", sync);
+
+  consentAcceptBtn.addEventListener("click", async () => {
+    if (!consentCheck.checked) return;
+    consentAcceptBtn.disabled = true;
+    const telemetry = consentTelemetry ? consentTelemetry.checked : true;
+    await chrome.storage.local.set({ diagnosticEnabled: telemetry });
+    chrome.runtime.sendMessage({
+      action: "consentGiven",
+      payload: { accepted: true, telemetry },
+    }).catch(() => {});
+    consentGate.style.display = "none";
+  });
+}
+
+// ── Personal profile fields ──
+const PROFILE_FIELDS = {
+  pfFamilyName: "familyName",
+  pfGivenName: "givenName",
+  pfMiddleName: "middleName",
+  pfBirthday: "birthday",
+  pfSection: "section",
+  pfYear: "year",
+  pfSubject: "subject",
+  pfCourse: "course",
+};
+
+async function loadPersonalProfile() {
+  const data = await chrome.storage.local.get(["personalProfile"]);
+  const profile = data.personalProfile || {};
+  for (const [id, key] of Object.entries(PROFILE_FIELDS)) {
+    const el = document.getElementById(id);
+    if (el && profile[key]) el.value = profile[key];
+  }
+}
+
+function collectPersonalProfile() {
+  const profile = {};
+  for (const [id, key] of Object.entries(PROFILE_FIELDS)) {
+    const el = document.getElementById(id);
+    if (el && el.value.trim()) profile[key] = el.value.trim();
+  }
+  return profile;
 }
 
 // ── Tab switching functionality ──
@@ -171,6 +240,8 @@ function updateCharCount() {
 
 document.addEventListener("DOMContentLoaded", () => {
   loadHistory();
+  initConsentGate();
+  loadPersonalProfile();
 
   chrome.runtime.sendMessage({ action: "fetchUserEmail" });
 
@@ -207,7 +278,8 @@ if (saveSettingsBtn) {
       customPrompt: customPromptInput.value.trim(),
       humanTyping: humanTypingInput.checked,
       verboseLogging: isVerbLogEnabled,
-      diagnosticEnabled: isDiagEnabled
+      diagnosticEnabled: isDiagEnabled,
+      personalProfile: collectPersonalProfile()
     }, () => {
       settingsStatus.className = "status success";
       settingsStatus.textContent = "✓ Settings saved!";

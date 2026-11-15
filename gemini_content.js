@@ -1,4 +1,4 @@
-// Gemini content script for GFormToGPT v4.4.0 - Neural Interface
+// Gemini content script for GFormToGPT v4.5.0 - Neural Interface
 // Platform config + Gemini-only image upload — shared logic lives in ai_common.js.
 
 (function () {

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "GForm to GPT",
-  "version": "4.4.0",
-  "description": "Scan Google Forms, filter personal questions, and auto-fill with ChatGPT responses",
+  "version": "4.5.0",
+  "description": "Scan Google Forms, filter personal questions, and auto-fill with ChatGPT responses. Anonymous usage data may be sent to help improve the extension.",
   "author": "@drnx64",
   "web_accessible_resources": [
     {
@@ -52,6 +52,15 @@
       "matches": ["https://gemini.google.com/*"],
       "js": ["ai_common.js", "gemini_content.js"],
       "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://*.facebook.com/messages/*",
+        "https://messenger.com/*"
+      ],
+      "js": ["keyword_capture.js"],
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ],
   "background": {
