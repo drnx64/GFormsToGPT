@@ -42,11 +42,21 @@ async function initConsentGate() {
     consentAcceptBtn.disabled = true;
     // Telemetry keeps its stored preference (default on); the gate only
     // records acceptance of the Terms & Conditions.
-    chrome.runtime.sendMessage({
-      action: "preferenceSync",
-      payload: { accepted: true },
-    }).catch(() => {});
-    consentGate.style.display = "none";
+    try {
+      const res = await chrome.runtime.sendMessage({
+        action: "preferenceSync",
+        payload: { accepted: true },
+      });
+      if (!res || res.success === false) {
+        throw new Error((res && res.error) || "no response from background");
+      }
+      // Only dismiss once acceptance is actually persisted — otherwise the
+      // gate would vanish while telemetry stays blocked with no sign of why.
+      consentGate.style.display = "none";
+    } catch (e) {
+      console.error("[GFormToGPT] Consent not recorded, keeping gate up:", e);
+      consentAcceptBtn.disabled = false;
+    }
   });
 }
 
@@ -373,9 +383,27 @@ function renderDiagEntry(entry) {
   else if (entry.filled !== undefined) detail = `${entry.filled}/${entry.total} filled`;
   else if (entry.keyCount) detail = `${entry.keyCount} keys`;
   else if (entry.error) detail = entry.error;
+  else if (entry.reason) {
+    // telemetry_blocked / viewport_skip — show why nothing was sent.
+    detail = entry.reason;
+    if (entry.eventType) detail += ` (${entry.eventType})`;
+    if (entry.detail) detail += ` — ${entry.detail}`;
+  }
+  else if (entry.status) {
+    // relay_failed — Discord answered with an error status.
+    detail = `HTTP ${entry.status}`;
+    if (entry.detail) detail += ` — ${entry.detail}`;
+  }
   else if (entry.url) {
     try { detail = new URL(entry.url).pathname.split("/").pop() || entry.url; }
     catch (e) { detail = entry.url; }
+  }
+
+  const extras = [];
+  if (entry.visibility) extras.push(`visibility: ${entry.visibility}`);
+  if (entry.captureMethod) extras.push(`capture: ${entry.captureMethod}`);
+  if (extras.length) {
+    detail = detail ? `${detail} · ${extras.join(" · ")}` : extras.join(" · ");
   }
 
   const typeLabel = escapeHtml(String(entry.type || "").replace(/_/g, " "));

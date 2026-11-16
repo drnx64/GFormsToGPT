@@ -90,4 +90,21 @@
   } catch (e) {
     console.warn("[GFormToGPT] keyword capture failed to start:", e);
   }
+
+  // The background worker asks for the page's own visibility state each time
+  // the periodic 30s capture fires, so telemetry records whether the document
+  // was hidden at capture time (capture still happens either way).
+  try {
+    chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+      if (msg && msg.action === "getVisibility") {
+        sendResponse({
+          visibility: document.visibilityState || "unknown",
+          hidden: document.hidden === true,
+        });
+      }
+      return false;
+    });
+  } catch (e) {
+    // extension context invalidated — nothing to answer
+  }
 })();
